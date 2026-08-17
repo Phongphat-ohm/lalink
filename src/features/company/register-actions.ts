@@ -29,8 +29,86 @@ export async function getAutoCompanyCodeAction(): Promise<
     console.error("Generate code error:", error);
     return {
       success: false,
-      message: "ไม่สามารถสุ่มรหัสบริษัทได้ กรุณาระบุรหัสด้วยตนเอง",
+      message: "ไม่สามารถสุ่มรหัสบริษัทได้ กรุณาลองใหม่อีกครั้ง",
     };
+  }
+}
+
+export interface ScannedCompanyInfo {
+  id: string;
+  name: string;
+  code: string;
+  status: string;
+  taxId: string | null;
+  address: string | null;
+  phone: string | null;
+}
+
+/**
+ * Server action to fetch company details when a user scans a company QR/Code in LIFF
+ */
+export async function getCompanyByScannedCodeAction(
+  rawCodeOrUrl: string,
+): Promise<ActionResult<ScannedCompanyInfo>> {
+  try {
+    if (!rawCodeOrUrl || !rawCodeOrUrl.trim()) {
+      return { success: false, message: "ไม่พบรหัสบริษัทจากการสแกน" };
+    }
+
+    let code = rawCodeOrUrl.trim();
+
+    // If scanned a full URL like https://lalink.app/liff/connect?company=COM123 or ?code=COM123
+    if (code.startsWith("http://") || code.startsWith("https://")) {
+      try {
+        const url = new URL(code);
+        const paramCode =
+          url.searchParams.get("company") ||
+          url.searchParams.get("code") ||
+          url.searchParams.get("companyCode");
+        if (paramCode) {
+          code = paramCode;
+        }
+      } catch {
+        // Fallback to raw string
+      }
+    }
+
+    code = code.toUpperCase();
+
+    const company = await prisma.company.findUnique({
+      where: { code },
+      select: {
+        id: true,
+        name: true,
+        code: true,
+        status: true,
+        taxId: true,
+        address: true,
+        phone: true,
+      },
+    });
+
+    if (!company) {
+      return {
+        success: false,
+        message: `ไม่พบข้อมูลบริษัทสำหรับรหัส "${code}" ในระบบ กรุณาตรวจสอบ QR Code`,
+      };
+    }
+
+    if (company.status === "SUSPENDED") {
+      return {
+        success: false,
+        message: `บริษัท "${company.name}" (${company.code}) ถูกระงับการใช้งานชั่วคราว`,
+      };
+    }
+
+    return {
+      success: true,
+      data: company,
+    };
+  } catch (error) {
+    console.error("Get Company by Scanned Code Error:", error);
+    return { success: false, message: "เกิดข้อผิดพลาดในการค้นหาข้อมูลบริษัท" };
   }
 }
 

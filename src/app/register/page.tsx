@@ -184,12 +184,14 @@ export default function CompanyRegisterPage() {
                       )}
                     </div>
 
-                    {/* Auto Generated Company Code */}
+                    {/* Auto Generated Company Code (Enforced System Auto-Generation) */}
                     <div className="space-y-1">
                       <div className="flex justify-between items-center">
-                        <label className="text-xs font-semibold text-[#0d253d]">
+                        <label className="text-xs font-semibold text-[#0d253d] flex items-center">
                           รหัสบริษัท (Tenant Code){" "}
-                          <span className="text-[#ea2261]">*</span>
+                          <span className="ml-1.5 text-[10px] text-[#059669] bg-[#ecfdf5] border border-[#a7f3d0] font-semibold px-2 py-0.5 rounded-full">
+                            สร้างอัตโนมัติโดยระบบ
+                          </span>
                         </label>
                         <button
                           type="button"
@@ -210,19 +212,16 @@ export default function CompanyRegisterPage() {
                           name="companyCode"
                           type="text"
                           value={companyCode}
-                          onChange={(e) =>
-                            setCompanyCode(e.target.value.toUpperCase())
-                          }
-                          placeholder="เช่น COM892"
+                          readOnly
+                          placeholder="กำลังสร้างรหัส..."
                           required
-                          disabled={isLoading}
-                          className="h-10 rounded-xl uppercase font-mono font-bold tracking-wider text-[#533afd] text-xs sm:text-sm pr-10"
+                          className="h-10 rounded-xl uppercase font-mono font-bold tracking-wider text-[#533afd] bg-[#f6f9fc] border-[#a8c3de]/60 text-xs sm:text-sm pr-10 cursor-not-allowed select-none"
                         />
                         <Sparkles className="h-4 w-4 text-[#533afd] absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
                       <p className="text-[11px] text-[#64748d]">
-                        รหัสนี้จะใช้สำหรับให้พนักงานเชื่อมต่อบัญชี LINE
-                        กับบริษัท
+                        ระบบสร้างรหัส 6 หลักเฉพาะให้อัตโนมัติ
+                        (ไม่สามารถกำหนดเองได้) เพื่อความปลอดภัยและไม่ซ้ำซ้อน
                       </p>
                       {fieldErrors.companyCode && (
                         <p className="text-[11px] text-[#ea2261] font-medium mt-1">
