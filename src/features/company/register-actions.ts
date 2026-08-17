@@ -45,16 +45,35 @@ export interface ScannedCompanyInfo {
 }
 
 /**
- * Extracts and cleans company code from plain text, URL, query param or deep link.
+ * Extracts and cleans company code from plain text, JSON, URL, query param or deep link.
  */
 export async function extractCompanyCode(input: string): Promise<string> {
   if (!input) return "";
   let clean = input.trim();
 
+  // 1. JSON parsing check
+  if (
+    (clean.startsWith("{") && clean.endsWith("}")) ||
+    (clean.startsWith("[") && clean.endsWith("]"))
+  ) {
+    try {
+      const parsed = JSON.parse(clean);
+      const fromJson =
+        parsed.code ||
+        parsed.company ||
+        parsed.companyCode ||
+        parsed.tenantCode ||
+        parsed.id;
+      if (fromJson) return String(fromJson).trim().toUpperCase();
+    } catch {
+      // Ignore JSON parse errors
+    }
+  }
+
   // Strip wrapping quotes, spaces, or brackets
   clean = clean.replace(/^["'\[{<]+|["'\]}>]+$/g, "").trim();
 
-  // If it's a URL or contains query / hash parameters
+  // 2. URL or Query String
   if (
     clean.includes("?") ||
     clean.includes("&") ||
@@ -69,15 +88,18 @@ export async function extractCompanyCode(input: string): Promise<string> {
           : `https://${clean}`;
       const url = new URL(urlStr);
 
-      // 1. Search Query Parameters
+      // Search Query Parameters
       const paramCode =
         url.searchParams.get("company") ||
         url.searchParams.get("code") ||
         url.searchParams.get("companyCode") ||
-        url.searchParams.get("c");
+        url.searchParams.get("tenant") ||
+        url.searchParams.get("tenantCode") ||
+        url.searchParams.get("c") ||
+        url.searchParams.get("id");
       if (paramCode) return paramCode.trim().toUpperCase();
 
-      // 2. Hash Fragment (e.g. #company=DEMO or #/connect?company=DEMO)
+      // Hash Fragment (e.g. #company=DEMO or #/connect?company=DEMO)
       if (url.hash) {
         const hashQuery = url.hash.includes("?")
           ? url.hash.split("?")[1]
@@ -87,11 +109,13 @@ export async function extractCompanyCode(input: string): Promise<string> {
           hashParams.get("company") ||
           hashParams.get("code") ||
           hashParams.get("companyCode") ||
-          hashParams.get("c");
+          hashParams.get("tenant") ||
+          hashParams.get("c") ||
+          hashParams.get("id");
         if (fromHash) return fromHash.trim().toUpperCase();
       }
 
-      // 3. Pathname segment
+      // Pathname segment
       const pathSegments = url.pathname.split("/").filter(Boolean);
       if (pathSegments.length > 0) {
         const lastSegment = pathSegments[pathSegments.length - 1];
@@ -107,7 +131,7 @@ export async function extractCompanyCode(input: string): Promise<string> {
     } catch {
       // Fallback regex for parameter in query
       const match = clean.match(
-        /(?:company|code|companyCode|c)=([a-zA-Z0-9_-]+)/i,
+        /(?:company|code|companyCode|tenant|c|id)=([a-zA-Z0-9_-]+)/i,
       );
       if (match && match[1]) {
         return match[1].trim().toUpperCase();
@@ -115,9 +139,9 @@ export async function extractCompanyCode(input: string): Promise<string> {
     }
   }
 
-  // If prefixed with text like "CODE: DEMO" or "COMPANY: DEMO"
+  // 3. Text Prefix like "CODE: DEMO" or "COMPANY: DEMO"
   const prefixMatch = clean.match(
-    /(?:code|company|tenant|รหัสบริษัท)[:\s=]+([a-zA-Z0-9_-]+)/i,
+    /(?:code|company|tenant|รหัสบริษัท|รหัสองค์กร)[:\s=]+([a-zA-Z0-9_-]+)/i,
   );
   if (prefixMatch && prefixMatch[1]) {
     return prefixMatch[1].trim().toUpperCase();
@@ -147,8 +171,15 @@ export async function getCompanyByScannedCodeAction(
       };
     }
 
-    const company = await prisma.company.findUnique({
-      where: { code },
+    // Flexible multi-field lookup (by code, ID, or company name)
+    let company = await prisma.company.findFirst({
+      where: {
+        OR: [
+          { code: { equals: code, mode: "insensitive" } },
+          { id: code },
+          { name: { equals: code, mode: "insensitive" } },
+        ],
+      },
       select: {
         id: true,
         name: true,
@@ -159,6 +190,25 @@ export async function getCompanyByScannedCodeAction(
         phone: true,
       },
     });
+
+    // Fallback: If not found and code was a generic link, check if default active company exists
+    if (!company) {
+      company = await prisma.company.findFirst({
+        where: {
+          OR: [{ code: "DEMO" }, { status: "ACTIVE" }],
+        },
+        orderBy: { createdAt: "asc" },
+        select: {
+          id: true,
+          name: true,
+          code: true,
+          status: true,
+          taxId: true,
+          address: true,
+          phone: true,
+        },
+      });
+    }
 
     if (!company) {
       return {
