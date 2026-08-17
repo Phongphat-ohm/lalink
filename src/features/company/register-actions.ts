@@ -45,6 +45,88 @@ export interface ScannedCompanyInfo {
 }
 
 /**
+ * Extracts and cleans company code from plain text, URL, query param or deep link.
+ */
+export async function extractCompanyCode(input: string): Promise<string> {
+  if (!input) return "";
+  let clean = input.trim();
+
+  // Strip wrapping quotes, spaces, or brackets
+  clean = clean.replace(/^["'\[{<]+|["'\]}>]+$/g, "").trim();
+
+  // If it's a URL or contains query / hash parameters
+  if (
+    clean.includes("?") ||
+    clean.includes("&") ||
+    clean.includes("=") ||
+    clean.includes("://") ||
+    clean.includes("/")
+  ) {
+    try {
+      const urlStr =
+        clean.startsWith("http://") || clean.startsWith("https://")
+          ? clean
+          : `https://${clean}`;
+      const url = new URL(urlStr);
+
+      // 1. Search Query Parameters
+      const paramCode =
+        url.searchParams.get("company") ||
+        url.searchParams.get("code") ||
+        url.searchParams.get("companyCode") ||
+        url.searchParams.get("c");
+      if (paramCode) return paramCode.trim().toUpperCase();
+
+      // 2. Hash Fragment (e.g. #company=DEMO or #/connect?company=DEMO)
+      if (url.hash) {
+        const hashQuery = url.hash.includes("?")
+          ? url.hash.split("?")[1]
+          : url.hash.replace(/^#/, "");
+        const hashParams = new URLSearchParams(hashQuery);
+        const fromHash =
+          hashParams.get("company") ||
+          hashParams.get("code") ||
+          hashParams.get("companyCode") ||
+          hashParams.get("c");
+        if (fromHash) return fromHash.trim().toUpperCase();
+      }
+
+      // 3. Pathname segment
+      const pathSegments = url.pathname.split("/").filter(Boolean);
+      if (pathSegments.length > 0) {
+        const lastSegment = pathSegments[pathSegments.length - 1];
+        if (
+          lastSegment &&
+          lastSegment !== "connect" &&
+          lastSegment !== "liff" &&
+          lastSegment.length <= 15
+        ) {
+          return lastSegment.trim().toUpperCase();
+        }
+      }
+    } catch {
+      // Fallback regex for parameter in query
+      const match = clean.match(
+        /(?:company|code|companyCode|c)=([a-zA-Z0-9_-]+)/i,
+      );
+      if (match && match[1]) {
+        return match[1].trim().toUpperCase();
+      }
+    }
+  }
+
+  // If prefixed with text like "CODE: DEMO" or "COMPANY: DEMO"
+  const prefixMatch = clean.match(
+    /(?:code|company|tenant|รหัสบริษัท)[:\s=]+([a-zA-Z0-9_-]+)/i,
+  );
+  if (prefixMatch && prefixMatch[1]) {
+    return prefixMatch[1].trim().toUpperCase();
+  }
+
+  return clean.toUpperCase();
+}
+
+/**
  * Server action to fetch company details when a user scans a company QR/Code in LIFF
  */
 export async function getCompanyByScannedCodeAction(
@@ -55,25 +137,15 @@ export async function getCompanyByScannedCodeAction(
       return { success: false, message: "ไม่พบรหัสบริษัทจากการสแกน" };
     }
 
-    let code = rawCodeOrUrl.trim();
+    const code = await extractCompanyCode(rawCodeOrUrl);
 
-    // If scanned a full URL like https://lalink.app/liff/connect?company=COM123 or ?code=COM123
-    if (code.startsWith("http://") || code.startsWith("https://")) {
-      try {
-        const url = new URL(code);
-        const paramCode =
-          url.searchParams.get("company") ||
-          url.searchParams.get("code") ||
-          url.searchParams.get("companyCode");
-        if (paramCode) {
-          code = paramCode;
-        }
-      } catch {
-        // Fallback to raw string
-      }
+    if (!code) {
+      return {
+        success: false,
+        message:
+          "ไม่สามารถระบุรหัสบริษัทจากข้อมูลที่สแกนได้ กรุณาลองใหม่อีกครั้ง",
+      };
     }
-
-    code = code.toUpperCase();
 
     const company = await prisma.company.findUnique({
       where: { code },

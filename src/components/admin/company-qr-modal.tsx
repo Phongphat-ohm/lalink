@@ -38,7 +38,7 @@ export function CompanyQrModal({
 }: CompanyQrModalProps) {
   const [qrDataUrl, setQrDataUrl] = React.useState<string>("");
   const [copied, setCopied] = React.useState(false);
-  const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
+  const [qrType, setQrType] = React.useState<"PLAIN" | "URL">("PLAIN");
 
   const connectUrl = React.useMemo(() => {
     if (typeof window !== "undefined") {
@@ -47,12 +47,14 @@ export function CompanyQrModal({
     return `https://lalink.app/liff/connect?company=${companyCode}`;
   }, [companyCode]);
 
+  const qrContent = qrType === "PLAIN" ? companyCode : connectUrl;
+
   React.useEffect(() => {
     if (!open) return;
 
     // Generate high-resolution QR data URL
     QRCode.toDataURL(
-      connectUrl,
+      qrContent,
       {
         width: 600,
         margin: 2,
@@ -68,7 +70,7 @@ export function CompanyQrModal({
         }
       },
     );
-  }, [open, connectUrl]);
+  }, [open, qrContent]);
 
   // Download high-resolution branded poster PNG
   function handleDownloadPng() {
@@ -245,6 +247,32 @@ export function CompanyQrModal({
         </DialogHeader>
 
         <div className="space-y-4 my-2">
+          {/* Format Selector: Plain Text vs URL */}
+          <div className="flex bg-[#f6f9fc] p-1 rounded-2xl border border-[#e3e8ee] gap-1">
+            <button
+              type="button"
+              onClick={() => setQrType("PLAIN")}
+              className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                qrType === "PLAIN"
+                  ? "bg-white text-[#533afd] shadow-xs"
+                  : "text-[#64748d] hover:text-[#0d253d]"
+              }`}
+            >
+              QR รหัสข้อความ (Plain Text)
+            </button>
+            <button
+              type="button"
+              onClick={() => setQrType("URL")}
+              className={`flex-1 py-1.5 px-3 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                qrType === "URL"
+                  ? "bg-white text-[#533afd] shadow-xs"
+                  : "text-[#64748d] hover:text-[#0d253d]"
+              }`}
+            >
+              QR ลิงก์ตรง (Web URL)
+            </button>
+          </div>
+
           {/* QR Display Card */}
           <div className="bg-[#f6f9fc] border border-[#e3e8ee] rounded-2xl p-5 shadow-xs flex flex-col items-center">
             <div className="space-y-1 mb-3">

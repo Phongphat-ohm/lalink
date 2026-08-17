@@ -132,4 +132,44 @@ describe("Phase 5: LINE LIFF Account Linking & Security", () => {
       expect(shouldHaltLoop).toBe(true);
     });
   });
+
+  describe("5. Plain Text & URL QR Code Extractor", () => {
+    it("should extract code from plain text", async () => {
+      const { extractCompanyCode } =
+        await import("@/features/company/register-actions");
+      expect(await extractCompanyCode("DEMO")).toBe("DEMO");
+      expect(await extractCompanyCode("  demo  ")).toBe("DEMO");
+      expect(await extractCompanyCode('"COM892"')).toBe("COM892");
+    });
+
+    it("should extract code from full URL query parameters", async () => {
+      const { extractCompanyCode } =
+        await import("@/features/company/register-actions");
+      expect(
+        await extractCompanyCode(
+          "https://lalink.app/liff/connect?company=DEMO",
+        ),
+      ).toBe("DEMO");
+      expect(
+        await extractCompanyCode(
+          "https://liff.line.me/2000000000-xxxx/connect?company=COM123",
+        ),
+      ).toBe("COM123");
+      expect(await extractCompanyCode("http://localhost:3000?code=DEMO")).toBe(
+        "DEMO",
+      );
+    });
+
+    it("should extract code from hash fragments or deep links", async () => {
+      const { extractCompanyCode } =
+        await import("@/features/company/register-actions");
+      expect(
+        await extractCompanyCode("https://liff.line.me/app#company=DEMO"),
+      ).toBe("DEMO");
+      expect(await extractCompanyCode("lalink://connect?company=ABC999")).toBe(
+        "ABC999",
+      );
+      expect(await extractCompanyCode("รหัสบริษัท: DEMO")).toBe("DEMO");
+    });
+  });
 });
