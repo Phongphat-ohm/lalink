@@ -1,0 +1,683 @@
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogAction,
+  AlertDialogCancel,
+} from "@/components/ui/alert-dialog";
+import {
+  approveLeaveRequestAction,
+  rejectLeaveRequestAction,
+} from "@/features/leave";
+import {
+  CheckCircle2,
+  XCircle,
+  Eye,
+  Search,
+  Loader2,
+  Calendar,
+  User,
+  FileText,
+  AlertCircle,
+  FileCheck,
+} from "lucide-react";
+
+export interface SerializedLeaveRequest {
+  id: string;
+  requestNumber: string;
+  startDate: string;
+  endDate: string;
+  startPeriod: string;
+  endPeriod: string;
+  totalDays: number;
+  reason: string;
+  status: string;
+  rejectionReason: string | null;
+  approvedBy: string | null;
+  createdAt: string;
+  employee: {
+    id: string;
+    employeeCode: string;
+    firstName: string;
+    lastName: string;
+    email: string | null;
+    phone: string | null;
+    department: { name: string } | null;
+    position: { name: string } | null;
+  };
+  leaveType: {
+    id: string;
+    name: string;
+    code: string;
+    isPaid: boolean;
+  };
+}
+
+interface LeaveRequestsTableProps {
+  initialRequests: SerializedLeaveRequest[];
+}
+
+export function LeaveRequestsTable({
+  initialRequests,
+}: LeaveRequestsTableProps) {
+  const router = useRouter();
+  const [requests, setRequests] = React.useState(initialRequests);
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<string>("ALL");
+
+  // Selected Request for Details Modal
+  const [selectedRequest, setSelectedRequest] =
+    React.useState<SerializedLeaveRequest | null>(null);
+
+  // Approve Dialog State
+  const [approveTarget, setApproveTarget] =
+    React.useState<SerializedLeaveRequest | null>(null);
+  const [isApproving, setIsApproving] = React.useState(false);
+
+  // Reject Dialog State
+  const [rejectTarget, setRejectTarget] =
+    React.useState<SerializedLeaveRequest | null>(null);
+  const [rejectionReason, setRejectionReason] = React.useState("");
+  const [rejectError, setRejectError] = React.useState<string | null>(null);
+  const [isRejecting, setIsRejecting] = React.useState(false);
+
+  // Filter requests
+  const filteredRequests = requests.filter((req) => {
+    const matchesStatus = statusFilter === "ALL" || req.status === statusFilter;
+    const matchesSearch =
+      req.requestNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.employee.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.employee.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      req.employee.employeeCode
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      req.leaveType.name.toLowerCase().includes(searchTerm.toLowerCase());
+
+    return matchesStatus && matchesSearch;
+  });
+
+  // Handle Approve with Loading
+  async function handleConfirmApprove() {
+    if (!approveTarget) return;
+
+    setIsApproving(true);
+    const result = await approveLeaveRequestAction(approveTarget.id);
+    setIsApproving(false);
+
+    if (result.success) {
+      setRequests((prev) =>
+        prev.map((r) =>
+          r.id === approveTarget.id ? { ...r, status: "APPROVED" } : r,
+        ),
+      );
+      setApproveTarget(null);
+      if (selectedRequest?.id === approveTarget.id) {
+        setSelectedRequest((prev) =>
+          prev ? { ...prev, status: "APPROVED" } : null,
+        );
+      }
+      router.refresh();
+    }
+  }
+
+  // Handle Reject with Loading
+  async function handleConfirmReject() {
+    if (!rejectTarget) return;
+
+    if (!rejectionReason || rejectionReason.trim().length === 0) {
+      setRejectError("กรุณาระบุเหตุผลในการไม่อนุมัติ");
+      return;
+    }
+
+    setIsRejecting(true);
+    setRejectError(null);
+
+    const result = await rejectLeaveRequestAction(
+      rejectTarget.id,
+      rejectionReason.trim(),
+    );
+    setIsRejecting(false);
+
+    if (result.success) {
+      setRequests((prev) =>
+        prev.map((r) =>
+          r.id === rejectTarget.id
+            ? {
+                ...r,
+                status: "REJECTED",
+                rejectionReason: rejectionReason.trim(),
+              }
+            : r,
+        ),
+      );
+      setRejectTarget(null);
+      setRejectionReason("");
+      if (selectedRequest?.id === rejectTarget.id) {
+        setSelectedRequest((prev) =>
+          prev
+            ? {
+                ...prev,
+                status: "REJECTED",
+                rejectionReason: rejectionReason.trim(),
+              }
+            : null,
+        );
+      }
+      router.refresh();
+    } else {
+      setRejectError(result.message || "เกิดข้อผิดพลาดในการไม่อนุมัติ");
+    }
+  }
+
+  const periodLabel = (period: string) => {
+    switch (period) {
+      case "HALF_DAY_AM":
+        return "ครึ่งวันเช้า";
+      case "HALF_DAY_PM":
+        return "ครึ่งวันบ่าย";
+      default:
+        return "เต็มวัน";
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      {/* Search and Filters Bar */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#64748d]" />
+          <Input
+            placeholder="ค้นหาชื่อ, รหัสพนักงาน, เลขที่ใบลา..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 h-10 rounded-full border-[#a8c3de]/60 focus-visible:border-[#533afd] text-xs sm:text-sm"
+          />
+        </div>
+
+        {/* Filter Pills */}
+        <div className="flex flex-wrap gap-1.5">
+          {[
+            { key: "ALL", label: "ทั้งหมด" },
+            { key: "PENDING", label: "รออนุมัติ" },
+            { key: "APPROVED", label: "อนุมัติแล้ว" },
+            { key: "REJECTED", label: "ไม่อนุมัติ" },
+            { key: "CANCELLED", label: "ยกเลิกแล้ว" },
+          ].map((tab) => (
+            <Button
+              key={tab.key}
+              variant={statusFilter === tab.key ? "default" : "outline"}
+              size="sm"
+              onClick={() => setStatusFilter(tab.key)}
+              className={`h-8 text-xs font-semibold rounded-full px-3.5 ${
+                statusFilter === tab.key
+                  ? "bg-[#533afd] hover:bg-[#4434d4] text-white shadow-xs"
+                  : "text-[#273951] border-[#e3e8ee] hover:border-[#533afd]"
+              }`}
+            >
+              {tab.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {/* Main Table Card */}
+      <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden">
+        <CardHeader className="p-4 border-b border-[#e3e8ee] bg-[#f6f9fc]/50 flex flex-row items-center justify-between">
+          <CardTitle className="text-sm font-semibold text-[#0d253d] flex items-center">
+            <FileCheck className="h-4 w-4 text-[#533afd] mr-2" />
+            รายการคำขอลา ({filteredRequests.length} รายการ)
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="p-0">
+          {filteredRequests.length === 0 ? (
+            <div className="py-12 text-center text-[#64748d] text-xs">
+              ไม่พบรายการคำขอลาที่ตรงกับเงื่อนไข
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="border-b border-[#e3e8ee] text-[#64748d] uppercase bg-[#f6f9fc]">
+                  <tr>
+                    <th className="py-3.5 px-4 pl-5 font-semibold">เลขที่</th>
+                    <th className="py-3.5 px-4 font-semibold">พนักงาน</th>
+                    <th className="py-3.5 px-4 font-semibold">ประเภทการลา</th>
+                    <th className="py-3.5 px-4 font-semibold">ช่วงวันที่</th>
+                    <th className="py-3.5 px-4 font-semibold">จำนวน</th>
+                    <th className="py-3.5 px-4 font-semibold">สถานะ</th>
+                    <th className="py-3.5 px-4 pr-5 font-semibold text-right">
+                      ดำเนินการ
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#e3e8ee]/70">
+                  {filteredRequests.map((req) => (
+                    <tr
+                      key={req.id}
+                      className="hover:bg-[#f6f9fc]/70 transition-colors cursor-pointer"
+                      onClick={() => setSelectedRequest(req)}
+                    >
+                      <td className="py-3.5 px-4 pl-5 font-mono font-semibold text-[#533afd] tabular-nums">
+                        {req.requestNumber}
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <p className="font-semibold text-[#0d253d]">
+                          {req.employee.firstName} {req.employee.lastName}
+                        </p>
+                        <p className="text-[11px] text-[#64748d]">
+                          {req.employee.employeeCode} •{" "}
+                          {req.employee.department?.name || "-"}
+                        </p>
+                      </td>
+                      <td className="py-3.5 px-4 font-medium text-[#0d253d]">
+                        {req.leaveType.name}
+                      </td>
+                      <td className="py-3.5 px-4 text-[#64748d] tabular-nums">
+                        {new Date(req.startDate).toLocaleDateString("th-TH")} -{" "}
+                        {new Date(req.endDate).toLocaleDateString("th-TH")}
+                      </td>
+                      <td className="py-3.5 px-4 font-bold text-[#0d253d] tabular-nums font-mono">
+                        {req.totalDays} วัน
+                      </td>
+                      <td className="py-3.5 px-4">
+                        <Badge
+                          variant={
+                            req.status === "APPROVED"
+                              ? "success"
+                              : req.status === "PENDING"
+                                ? "warning"
+                                : req.status === "REJECTED"
+                                  ? "destructive"
+                                  : "outline"
+                          }
+                          className="text-[10px] rounded-full px-2.5 py-0.5"
+                        >
+                          {req.status === "APPROVED"
+                            ? "อนุมัติแล้ว"
+                            : req.status === "PENDING"
+                              ? "รออนุมัติ"
+                              : req.status === "REJECTED"
+                                ? "ไม่อนุมัติ"
+                                : "ยกเลิกแล้ว"}
+                        </Badge>
+                      </td>
+                      <td
+                        className="py-3.5 px-4 pr-5 text-right whitespace-nowrap"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <div className="flex items-center justify-end space-x-1.5">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setSelectedRequest(req)}
+                            className="h-7.5 text-xs text-[#273951] border-[#e3e8ee] hover:border-[#533afd] hover:text-[#533afd] rounded-full px-2.5"
+                          >
+                            <Eye className="h-3.5 w-3.5 mr-1" /> ดูข้อมูล
+                          </Button>
+
+                          {req.status === "PENDING" && (
+                            <>
+                              <Button
+                                size="sm"
+                                onClick={() => setApproveTarget(req)}
+                                className="h-7.5 text-xs bg-[#059669] hover:bg-[#047857] text-white font-semibold shadow-xs rounded-full px-3"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1" />{" "}
+                                อนุมัติ
+                              </Button>
+
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  setRejectTarget(req);
+                                  setRejectionReason("");
+                                  setRejectError(null);
+                                }}
+                                className="h-7.5 text-xs text-[#ea2261] border-[#ea2261]/30 hover:bg-[#ffe4e6] rounded-full px-3"
+                              >
+                                <XCircle className="h-3.5 w-3.5 mr-1" /> ปฏิเสธ
+                              </Button>
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* 1. Modal: ดูรายละเอียดการลาแบบเต็ม (View Leave Details Modal) */}
+      <Dialog
+        open={!!selectedRequest}
+        onOpenChange={(open) => !open && setSelectedRequest(null)}
+      >
+        <DialogContent
+          className="max-w-xl p-6 rounded-2xl"
+          onClose={() => setSelectedRequest(null)}
+        >
+          {selectedRequest && (
+            <div className="space-y-5">
+              <DialogHeader>
+                <div className="flex items-center justify-between border-b border-[#e3e8ee] pb-3">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <DialogTitle className="text-lg font-bold text-[#0d253d]">
+                        รายละเอียดคำขอลางาน
+                      </DialogTitle>
+                      <Badge
+                        variant={
+                          selectedRequest.status === "APPROVED"
+                            ? "success"
+                            : selectedRequest.status === "PENDING"
+                              ? "warning"
+                              : selectedRequest.status === "REJECTED"
+                                ? "destructive"
+                                : "outline"
+                        }
+                        className="text-xs rounded-full px-2.5 py-0.5"
+                      >
+                        {selectedRequest.status === "APPROVED"
+                          ? "อนุมัติแล้ว"
+                          : selectedRequest.status === "PENDING"
+                            ? "รออนุมัติ"
+                            : selectedRequest.status === "REJECTED"
+                              ? "ไม่อนุมัติ"
+                              : "ยกเลิกแล้ว"}
+                      </Badge>
+                    </div>
+                    <p className="text-xs font-mono text-[#533afd] mt-1 font-semibold">
+                      {selectedRequest.requestNumber}
+                    </p>
+                  </div>
+                </div>
+              </DialogHeader>
+
+              {/* Employee Card */}
+              <div className="rounded-xl border border-[#e3e8ee] bg-[#f6f9fc] p-3.5 text-xs space-y-2">
+                <div className="flex items-center space-x-2 text-[#0d253d] font-bold">
+                  <User className="h-4 w-4 text-[#533afd]" />
+                  <span>
+                    {selectedRequest.employee.firstName}{" "}
+                    {selectedRequest.employee.lastName}
+                  </span>
+                  <span className="font-mono text-[#64748d] font-normal">
+                    ({selectedRequest.employee.employeeCode})
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[#64748d] pt-1">
+                  <p>
+                    <span className="text-[#64748d]/70">แผนก:</span>{" "}
+                    {selectedRequest.employee.department?.name || "-"}
+                  </p>
+                  <p>
+                    <span className="text-[#64748d]/70">ตำแหน่ง:</span>{" "}
+                    {selectedRequest.employee.position?.name || "-"}
+                  </p>
+                  {selectedRequest.employee.email && (
+                    <p>
+                      <span className="text-[#64748d]/70">อีเมล:</span>{" "}
+                      {selectedRequest.employee.email}
+                    </p>
+                  )}
+                  {selectedRequest.employee.phone && (
+                    <p>
+                      <span className="text-[#64748d]/70">โทร:</span>{" "}
+                      {selectedRequest.employee.phone}
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Leave Details Grid */}
+              <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="rounded-xl border border-[#e3e8ee] p-3 space-y-1 bg-white">
+                  <p className="text-[#64748d] font-semibold">ประเภทการลา</p>
+                  <p className="font-bold text-[#0d253d] text-sm">
+                    {selectedRequest.leaveType.name}
+                  </p>
+                  <Badge variant="outline" className="text-[10px] rounded-full">
+                    {selectedRequest.leaveType.isPaid
+                      ? "ได้รับค่าจ้าง"
+                      : "ไม่ได้รับค่าจ้าง"}
+                  </Badge>
+                </div>
+
+                <div className="rounded-xl border border-[#e3e8ee] p-3 space-y-1 bg-white">
+                  <p className="text-[#64748d] font-semibold">
+                    จำนวนวันลาสุทธิ
+                  </p>
+                  <p className="font-bold text-[#533afd] text-xl font-mono tabular-nums">
+                    {selectedRequest.totalDays} วัน
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-[#e3e8ee] p-3.5 text-xs space-y-2 bg-white">
+                <div className="flex items-center space-x-2 text-[#0d253d] font-semibold">
+                  <Calendar className="h-4 w-4 text-[#533afd]" />
+                  <span>ระยะเวลาที่ขอลา</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[#64748d]">
+                  <p>
+                    <span className="text-[#64748d]/70">เริ่ม:</span>{" "}
+                    {new Date(selectedRequest.startDate).toLocaleDateString(
+                      "th-TH",
+                    )}{" "}
+                    ({periodLabel(selectedRequest.startPeriod)})
+                  </p>
+                  <p>
+                    <span className="text-[#64748d]/70">สิ้นสุด:</span>{" "}
+                    {new Date(selectedRequest.endDate).toLocaleDateString(
+                      "th-TH",
+                    )}{" "}
+                    ({periodLabel(selectedRequest.endPeriod)})
+                  </p>
+                </div>
+              </div>
+
+              {/* Reason */}
+              <div className="rounded-xl border border-[#e3e8ee] p-3.5 text-xs space-y-1 bg-white">
+                <div className="flex items-center space-x-2 text-[#0d253d] font-semibold">
+                  <FileText className="h-4 w-4 text-[#533afd]" />
+                  <span>เหตุผลในการลา</span>
+                </div>
+                <p className="text-[#0d253d] bg-[#f6f9fc] p-2.5 rounded-lg">
+                  {selectedRequest.reason || "ไม่ระบุเหตุผล"}
+                </p>
+              </div>
+
+              {/* Rejection Note if Rejected */}
+              {selectedRequest.status === "REJECTED" &&
+                selectedRequest.rejectionReason && (
+                  <div className="rounded-xl border border-[#fecdd3] bg-[#ffe4e6] p-3.5 text-xs space-y-1">
+                    <p className="font-bold text-[#ea2261]">
+                      เหตุผลที่ไม่อนุมัติ:
+                    </p>
+                    <p className="text-[#ea2261]">
+                      {selectedRequest.rejectionReason}
+                    </p>
+                  </div>
+                )}
+
+              <DialogFooter className="pt-2 flex flex-col sm:flex-row gap-2 border-t border-[#e3e8ee]">
+                {selectedRequest.status === "PENDING" ? (
+                  <div className="flex w-full items-center justify-between">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setRejectTarget(selectedRequest);
+                        setRejectionReason("");
+                        setRejectError(null);
+                      }}
+                      className="rounded-full text-[#ea2261] border-[#ea2261]/30 hover:bg-[#ffe4e6] text-xs h-9 px-4"
+                    >
+                      <XCircle className="h-3.5 w-3.5 mr-1" /> ไม่อนุมัติ
+                    </Button>
+
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        onClick={() => setSelectedRequest(null)}
+                        className="rounded-full text-xs h-9 px-4"
+                      >
+                        ปิด
+                      </Button>
+                      <Button
+                        onClick={() => setApproveTarget(selectedRequest)}
+                        className="rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-semibold h-9 px-5 shadow-xs"
+                      >
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" />{" "}
+                        อนุมัติคำขอลา
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={() => setSelectedRequest(null)}
+                    className="rounded-full w-full sm:w-auto text-xs h-9"
+                  >
+                    ปิดหน้าต่าง
+                  </Button>
+                )}
+              </DialogFooter>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* 2. Alert Dialog: ยืนยันการอนุมัติ (Approve Confirmation) */}
+      <AlertDialog
+        open={!!approveTarget}
+        onOpenChange={(open) => !open && setApproveTarget(null)}
+      >
+        <AlertDialogContent className="rounded-2xl max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
+              <CheckCircle2 className="h-5 w-5 text-[#059669] mr-2" />
+              ยืนยันการอนุมัติคำขอลางาน?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-[#64748d]">
+              คุณกำลังจะอนุมัติคำขอลาเลขที่{" "}
+              <strong className="text-[#0d253d]">
+                {approveTarget?.requestNumber}
+              </strong>{" "}
+              ของ{" "}
+              <strong className="text-[#0d253d]">
+                {approveTarget?.employee.firstName}{" "}
+                {approveTarget?.employee.lastName}
+              </strong>{" "}
+              (จำนวน {approveTarget?.totalDays} วัน) ระบบจะตัดยอดคงเหลือและส่ง
+              Flex Message แจ้งเตือนพนักงานผ่าน LINE ทันที
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel
+              disabled={isApproving}
+              className="rounded-full text-xs"
+            >
+              ยกเลิก
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmApprove}
+              disabled={isApproving}
+              className="rounded-full bg-[#059669] hover:bg-[#047857] text-white text-xs font-semibold"
+            >
+              {isApproving ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  กำลังอนุมัติ...
+                </>
+              ) : (
+                "ยืนยันการอนุมัติ"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 3. Alert Dialog: ปฏิเสธคำขอลา (Reject Confirmation with Reason) */}
+      <AlertDialog
+        open={!!rejectTarget}
+        onOpenChange={(open) => !open && setRejectTarget(null)}
+      >
+        <AlertDialogContent className="rounded-2xl max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold text-[#ea2261] flex items-center">
+              <XCircle className="h-5 w-5 text-[#ea2261] mr-2" />
+              ระบุเหตุผลในการไม่อนุมัติคำขอลา
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-[#64748d]">
+              กรุณาระบุเหตุผลการไม่อนุมัติสำหรับใบลาเลขที่{" "}
+              <strong className="text-[#0d253d]">
+                {rejectTarget?.requestNumber}
+              </strong>{" "}
+              (ข้อมูลนี้จะถูกส่งแจ้งเตือนไปยังพนักงานทาง LINE)
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="my-3 space-y-2">
+            <Input
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              placeholder="เช่น ติดภารกิจด่วนของทีม, โควตาวันลาไม่เพียงพอ..."
+              className="h-10 text-xs rounded-xl"
+              required
+            />
+            {rejectError && (
+              <p className="text-[11px] font-medium text-[#ea2261] flex items-center">
+                <AlertCircle className="h-3.5 w-3.5 mr-1" />
+                {rejectError}
+              </p>
+            )}
+          </div>
+
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel
+              disabled={isRejecting}
+              className="rounded-full text-xs"
+            >
+              ยกเลิก
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmReject}
+              disabled={isRejecting}
+              className="rounded-full bg-[#ea2261] hover:bg-[#d01750] text-white text-xs font-semibold"
+            >
+              {isRejecting ? (
+                <>
+                  <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  กำลังบันทึก...
+                </>
+              ) : (
+                "ยืนยันการไม่อนุมัติ"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

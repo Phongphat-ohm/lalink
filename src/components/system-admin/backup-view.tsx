@@ -1,0 +1,191 @@
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Database,
+  Download,
+  RotateCcw,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  HardDrive,
+  Calendar,
+  ShieldCheck,
+} from "lucide-react";
+import { triggerDatabaseBackupAction } from "@/features/company/super-admin-ops-actions";
+
+export interface SerializedBackupLog {
+  id: string;
+  filename: string;
+  sizeBytes: string;
+  status: string;
+  triggerType: string;
+  checksum: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+interface BackupViewProps {
+  backups: SerializedBackupLog[];
+}
+
+export function BackupView({ backups }: BackupViewProps) {
+  const router = useRouter();
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [successMessage, setSuccessMessage] = React.useState<string | null>(
+    null,
+  );
+
+  async function handleTriggerBackup() {
+    setIsLoading(true);
+    setSuccessMessage(null);
+
+    const result = await triggerDatabaseBackupAction();
+    setIsLoading(false);
+
+    if (result.success) {
+      setSuccessMessage(result.message || "สร้างสำรองฐานข้อมูลสำเร็จ!");
+      router.refresh();
+      setTimeout(() => setSuccessMessage(null), 4000);
+    } else {
+      alert(result.message || "เกิดข้อผิดพลาดในการสำรองข้อมูล");
+    }
+  }
+
+  function formatBytes(bytesStr: string) {
+    const bytes = Number(bytesStr);
+    if (!bytes || bytes === 0) return "0 B";
+    const k = 1024;
+    const sizes = ["B", "KB", "MB", "GB"];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#0d253d] tracking-tight">
+            สำรองและกู้คืนฐานข้อมูล (Backup & Recovery)
+          </h1>
+          <p className="text-xs text-[#64748d] mt-0.5">
+            จัดการการสำรองข้อมูลอัตโนมัติและสั่ง Trigger สร้าง Snapshot
+            สำรองฐานข้อมูลแบบ Manual
+          </p>
+        </div>
+
+        <Button
+          onClick={handleTriggerBackup}
+          disabled={isLoading}
+          className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white px-5 h-9 text-xs font-semibold shadow-sm"
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+              กำลังสำรองข้อมูล...
+            </>
+          ) : (
+            <>
+              <Database className="h-4 w-4 mr-1.5" /> สำรองข้อมูลทันที (Backup
+              Now)
+            </>
+          )}
+        </Button>
+      </div>
+
+      {successMessage && (
+        <div className="p-3.5 rounded-2xl bg-[#ecfdf5] border border-[#a7f3d0] text-[#059669] text-xs font-semibold flex items-center shadow-xs">
+          <CheckCircle2 className="h-4 w-4 mr-2 shrink-0" />
+          <span>{successMessage}</span>
+        </div>
+      )}
+
+      {/* Backups Table */}
+      <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden">
+        <CardContent className="p-0">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs text-left">
+              <thead className="border-b border-[#e3e8ee] text-[#64748d] uppercase bg-[#f6f9fc]">
+                <tr>
+                  <th className="py-3.5 px-4 pl-5 font-semibold">
+                    ชื่อไฟล์สำรอง (Backup File)
+                  </th>
+                  <th className="py-3.5 px-4 font-semibold">ขนาดไฟล์</th>
+                  <th className="py-3.5 px-4 font-semibold">ประเภท</th>
+                  <th className="py-3.5 px-4 font-semibold">
+                    Checksum (SHA256)
+                  </th>
+                  <th className="py-3.5 px-4 font-semibold">สถานะ</th>
+                  <th className="py-3.5 px-4 pr-5 font-semibold">
+                    วัน-เวลาที่สร้าง
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#e3e8ee]/70 font-mono">
+                {backups.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="py-12 text-center text-[#64748d] font-sans"
+                    >
+                      ยังไม่มีประวัติการสำรองฐานข้อมูล กดปุ่ม
+                      &ldquo;สำรองข้อมูลทันที&rdquo; เพื่อสร้าง Snapshot แรก
+                    </td>
+                  </tr>
+                ) : (
+                  backups.map((b) => (
+                    <tr
+                      key={b.id}
+                      className="hover:bg-[#f6f9fc]/70 transition-colors"
+                    >
+                      <td className="py-3.5 px-4 pl-5 font-bold text-[#0d253d] font-sans">
+                        <div className="flex items-center space-x-2">
+                          <HardDrive className="h-4 w-4 text-[#533afd] shrink-0" />
+                          <span className="font-mono">{b.filename}</span>
+                        </div>
+                      </td>
+                      <td className="py-3.5 px-4 text-[#64748d]">
+                        {formatBytes(b.sizeBytes)}
+                      </td>
+                      <td className="py-3.5 px-4 font-sans">
+                        <Badge
+                          variant={
+                            b.triggerType === "MANUAL" ? "default" : "secondary"
+                          }
+                          className="text-[10px] rounded-full px-2"
+                        >
+                          {b.triggerType}
+                        </Badge>
+                      </td>
+                      <td className="py-3.5 px-4 text-[#64748d] text-[11px] truncate max-w-[120px]">
+                        {b.checksum || "-"}
+                      </td>
+                      <td className="py-3.5 px-4 font-sans">
+                        <Badge
+                          variant={
+                            b.status === "COMPLETED" ? "success" : "destructive"
+                          }
+                          className="text-[10px] rounded-full px-2"
+                        >
+                          {b.status}
+                        </Badge>
+                      </td>
+                      <td className="py-3.5 px-4 pr-5 text-[#64748d] tabular-nums whitespace-nowrap">
+                        {new Date(b.createdAt).toLocaleString("th-TH")}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

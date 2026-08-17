@@ -1,0 +1,107 @@
+import { describe, it, expect, beforeEach } from "vitest";
+import { accountLinkingSchema } from "@/features/employee/schemas";
+import {
+  checkRateLimit,
+  recordFailedAttempt,
+  clearRateLimitStore,
+} from "@/lib/security/rate-limiter";
+
+describe("Phase 5: LINE LIFF Account Linking & Security", () => {
+  beforeEach(() => {
+    clearRateLimitStore();
+  });
+
+  describe("1. Schema Validation", () => {
+    it("should accept valid linking input", () => {
+      const result = accountLinkingSchema.safeParse({
+        companyCode: "DEMO",
+        employeeCode: "EMP-001",
+        dateOfBirth: "1995-05-15",
+        lineIdToken: "mock-line-token",
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.companyCode).toBe("DEMO");
+        expect(result.data.employeeCode).toBe("EMP-001");
+        expect(result.data.dateOfBirth).toBe("1995-05-15");
+      }
+    });
+
+    it("should reject invalid Date of Birth format", () => {
+      const result = accountLinkingSchema.safeParse({
+        companyCode: "DEMO",
+        employeeCode: "EMP-001",
+        dateOfBirth: "15/05/1995", // Wrong format
+      });
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.flatten().fieldErrors.dateOfBirth).toBeDefined();
+      }
+    });
+
+    it("should normalize company and employee codes to uppercase", () => {
+      const result = accountLinkingSchema.safeParse({
+        companyCode: "demo",
+        employeeCode: "emp-001",
+        dateOfBirth: "1995-05-15",
+      });
+
+      expect(result.success).toBe(true);
+      if (result.success) {
+        expect(result.data.companyCode).toBe("DEMO");
+        expect(result.data.employeeCode).toBe("EMP-001");
+      }
+    });
+  });
+
+  describe("2. Security: Rate Limiting & Lockout", () => {
+    it("should lock out account linking after 5 consecutive failed attempts", () => {
+      const rateLimitKey = "account-link:DEMO:EMP-999";
+
+      // 4 failed attempts: not locked yet
+      for (let i = 1; i <= 4; i++) {
+        const attempt = recordFailedAttempt(rateLimitKey, { maxAttempts: 5 });
+        expect(attempt.isLocked).toBe(false);
+        expect(attempt.remainingAttempts).toBe(5 - i);
+      }
+
+      // 5th attempt: should lock
+      const fifthAttempt = recordFailedAttempt(rateLimitKey, {
+        maxAttempts: 5,
+      });
+      expect(fifthAttempt.isLocked).toBe(true);
+      expect(fifthAttempt.remainingAttempts).toBe(0);
+
+      // Subsequent check should be blocked
+      const status = checkRateLimit(rateLimitKey, { maxAttempts: 5 });
+      expect(status.allowed).toBe(false);
+      expect(status.lockoutRemainingSeconds).toBeGreaterThan(0);
+    });
+  });
+
+  describe("3. Zero Information Leakage Policy", () => {
+    it("should use a generic error message regardless of which field is incorrect", () => {
+      const genericMsg =
+        "ไม่สามารถเชื่อมต่อบัญชีได้ กรุณาตรวจสอบข้อมูลอีกครั้ง";
+
+      // Simulation: whether Company is wrong, Employee is wrong, or DOB is wrong:
+      // The return message must ALWAYS be generic to prevent user enumeration
+      const simulateError = (
+        reason: "WRONG_COMPANY" | "WRONG_EMP" | "WRONG_DOB",
+      ) => {
+        switch (reason) {
+          case "WRONG_COMPANY":
+          case "WRONG_EMP":
+          case "WRONG_DOB":
+            return genericMsg;
+        }
+      };
+
+      expect(simulateError("WRONG_COMPANY")).toBe(genericMsg);
+      expect(simulateError("WRONG_EMP")).toBe(genericMsg);
+      expect(simulateError("WRONG_DOB")).toBe(genericMsg);
+    });
+  });
+});

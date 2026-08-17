@@ -1,0 +1,371 @@
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import {
+  GitBranch,
+  Plus,
+  Trash2,
+  Phone,
+  MapPin,
+  Users,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+  Building2,
+} from "lucide-react";
+import {
+  createBranchAction,
+  deleteBranchAction,
+} from "@/features/organization/branch-actions";
+
+export interface SerializedBranch {
+  id: string;
+  code: string;
+  name: string;
+  address: string | null;
+  phone: string | null;
+  isMain: boolean;
+  employeesCount: number;
+  departmentsCount: number;
+  createdAt: string;
+}
+
+interface BranchViewProps {
+  branches: SerializedBranch[];
+}
+
+export function BranchView({ branches }: BranchViewProps) {
+  const router = useRouter();
+  const [isCreateOpen, setIsCreateOpen] = React.useState(false);
+  const [deleteTarget, setDeleteTarget] =
+    React.useState<SerializedBranch | null>(null);
+
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [error, setError] = React.useState<string | null>(null);
+
+  // Form states
+  const [code, setCode] = React.useState("");
+  const [name, setName] = React.useState("");
+  const [address, setAddress] = React.useState("");
+  const [phone, setPhone] = React.useState("");
+  const [isMain, setIsMain] = React.useState(false);
+
+  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
+    const formData = new FormData();
+    formData.append("code", code);
+    formData.append("name", name);
+    formData.append("address", address);
+    formData.append("phone", phone);
+    formData.append("isMain", isMain ? "true" : "false");
+
+    const result = await createBranchAction(null, formData);
+    setIsLoading(false);
+
+    if (result.success) {
+      setIsCreateOpen(false);
+      setCode("");
+      setName("");
+      setAddress("");
+      setPhone("");
+      setIsMain(false);
+      router.refresh();
+    } else {
+      setError(result.message || "เกิดข้อผิดพลาดในการสร้างสาขา");
+    }
+  }
+
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return;
+    setIsLoading(true);
+
+    const result = await deleteBranchAction(deleteTarget.id);
+    setIsLoading(false);
+
+    if (result.success) {
+      setDeleteTarget(null);
+      router.refresh();
+    } else {
+      alert(result.message || "ไม่สามารถลบสาขาได้");
+    }
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-xl sm:text-2xl font-bold text-[#0d253d] tracking-tight">
+            จัดการสาขาองค์กร (Branches)
+          </h1>
+          <p className="text-xs text-[#64748d] mt-0.5">
+            กำหนดสาขา สำนักงานใหญ่ และสาขาย่อยของบริษัท
+          </p>
+        </div>
+
+        <Button
+          onClick={() => {
+            setIsCreateOpen(true);
+            setError(null);
+          }}
+          className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white px-5 h-9 text-xs font-semibold shadow-sm"
+        >
+          <Plus className="h-4 w-4 mr-1.5" /> เพิ่มสาขาใหม่
+        </Button>
+      </div>
+
+      {/* Branches List */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {branches.length === 0 ? (
+          <div className="sm:col-span-2 lg:col-span-3 text-center py-12 bg-white rounded-2xl border border-dashed border-[#e3e8ee] p-6 text-xs text-[#64748d]">
+            ยังไม่มีข้อมูลสาขาในระบบ กดปุ่ม &ldquo;เพิ่มสาขาใหม่&rdquo;
+            เพื่อเริ่มต้น
+          </div>
+        ) : (
+          branches.map((b) => (
+            <Card
+              key={b.id}
+              className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden hover:border-[#533afd]/40 transition-colors flex flex-col justify-between"
+            >
+              <CardHeader className="p-4 pb-2 border-b border-[#e3e8ee]/60 bg-[#f6f9fc]/40 flex flex-row items-center justify-between">
+                <div className="flex items-center space-x-2">
+                  <span className="font-mono text-xs font-bold text-[#533afd] bg-[#533afd]/10 px-2 py-0.5 rounded-full">
+                    {b.code}
+                  </span>
+                  {b.isMain && (
+                    <Badge className="bg-[#ecfdf5] text-[#059669] border-[#a7f3d0] text-[10px] rounded-full px-2">
+                      สำนักงานใหญ่
+                    </Badge>
+                  )}
+                </div>
+
+                {!b.isMain && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setDeleteTarget(b)}
+                    className="h-7 w-7 text-[#ea2261] hover:bg-[#ffe4e6] rounded-full"
+                    title="ลบสาขา"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </CardHeader>
+
+              <CardContent className="p-4 space-y-3">
+                <h3 className="font-bold text-sm text-[#0d253d]">{b.name}</h3>
+
+                <div className="space-y-1.5 text-xs text-[#64748d]">
+                  {b.address && (
+                    <div className="flex items-start space-x-1.5">
+                      <MapPin className="h-3.5 w-3.5 text-[#64748d] shrink-0 mt-0.5" />
+                      <span className="line-clamp-2">{b.address}</span>
+                    </div>
+                  )}
+                  {b.phone && (
+                    <div className="flex items-center space-x-1.5">
+                      <Phone className="h-3.5 w-3.5 text-[#64748d] shrink-0" />
+                      <span>{b.phone}</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2 border-t border-[#e3e8ee]/70 flex items-center justify-between text-xs text-[#64748d]">
+                  <span className="flex items-center">
+                    <Users className="h-3.5 w-3.5 mr-1 text-[#533afd]" />{" "}
+                    พนักงาน:
+                  </span>
+                  <span className="font-bold font-mono text-[#0d253d]">
+                    {b.employeesCount} คน
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Create Branch Modal */}
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent
+          onClose={() => setIsCreateOpen(false)}
+          className="max-w-md rounded-2xl p-6"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
+              <Building2 className="h-5 w-5 text-[#533afd] mr-2" />
+              เพิ่มสาขาใหม่
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#64748d]">
+              กรอกข้อมูลสาขาเพื่อจัดกลุ่มแผนกและพนักงาน
+            </DialogDescription>
+          </DialogHeader>
+
+          {error && (
+            <div className="p-2.5 rounded-xl bg-[#ffe4e6] text-[#ea2261] text-xs">
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleCreate} className="space-y-3.5 mt-2">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                รหัสสาขา (Branch Code) <span className="text-[#ea2261]">*</span>
+              </label>
+              <Input
+                placeholder="เช่น HQ, BKK01, CNX02"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                required
+                disabled={isLoading}
+                className="h-9 rounded-xl text-xs font-mono font-bold"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                ชื่อสาขา <span className="text-[#ea2261]">*</span>
+              </label>
+              <Input
+                placeholder="เช่น สำนักงานใหญ่, สาขาเชียงใหม่"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                disabled={isLoading}
+                className="h-9 rounded-xl text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                เบอร์โทรศัพท์สาขา
+              </label>
+              <Input
+                placeholder="เช่น 02-123-4567"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                disabled={isLoading}
+                className="h-9 rounded-xl text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                ที่อยู่สาขา
+              </label>
+              <textarea
+                rows={2}
+                placeholder="ที่อยู่ ถนน แขวง/ตำบล จังหวัด"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                disabled={isLoading}
+                className="w-full rounded-xl border border-[#a8c3de]/60 p-2.5 text-xs focus:border-[#533afd] focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center space-x-2 pt-1">
+              <input
+                type="checkbox"
+                id="isMain"
+                checked={isMain}
+                onChange={(e) => setIsMain(e.target.checked)}
+                className="rounded border-[#e3e8ee] text-[#533afd] focus:ring-[#533afd]"
+              />
+              <label
+                htmlFor="isMain"
+                className="text-xs font-medium text-[#0d253d] cursor-pointer"
+              >
+                ตั้งเป็นสำนักงานใหญ่ (Main Branch)
+              </label>
+            </div>
+
+            <DialogFooter className="mt-6 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsCreateOpen(false)}
+                disabled={isLoading}
+                className="rounded-full text-xs h-9 px-4"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                disabled={isLoading}
+                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] text-xs h-9 px-5 font-semibold"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    กำลังบันทึก...
+                  </>
+                ) : (
+                  "บันทึกสาขา"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Alert */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent className="max-w-md rounded-2xl p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold text-[#0d253d]">
+              ยืนยันการลบสาขา?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-[#64748d]">
+              คุณต้องการลบสาขา &ldquo;{deleteTarget?.name}&rdquo; (
+              {deleteTarget?.code}) ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel
+              disabled={isLoading}
+              className="rounded-full text-xs h-9 px-4"
+            >
+              ยกเลิก
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isLoading}
+              className="rounded-full bg-[#ea2261] text-white hover:bg-[#d91452] text-xs h-9 px-5 font-semibold"
+            >
+              {isLoading ? "กำลังลบ..." : "ลบสาขา"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}

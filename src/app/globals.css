@@ -1,26 +1,148 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
+@layer base {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --background: 0 0% 100%;
+    --foreground: 210 65% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 210 65% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 210 65% 15%;
+
+    /* Primary: Electric Indigo (#533afd) */
+    --primary: 248 97% 61%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary: Soft Slate/Canvas-soft (#f6f9fc) */
+    --secondary: 210 40% 98%;
+    --secondary-foreground: 216 35% 24%;
+
+    --muted: 214 32% 96%;
+    --muted-foreground: 216 17% 47%;
+
+    --accent: 248 92% 95%;
+    --accent-foreground: 248 97% 61%;
+
+    --destructive: 341 82% 52%;
+    --destructive-foreground: 0 0% 100%;
+
+    --success: 158 75% 40%;
+    --success-foreground: 0 0% 100%;
+
+    --warning: 38 92% 50%;
+    --warning-foreground: 0 0% 100%;
+
+    --border: 214 24% 91%;
+    --input: 211 48% 77%;
+    --ring: 248 97% 61%;
+
+    --radius: 0.75rem;
+
+    /* Custom Stripi tokens */
+    --ink: #0d253d;
+    --ink-secondary: #273951;
+    --ink-mute: #64748d;
+    --brand-dark-900: #1c1e54;
+    --primary-deep: #4434d4;
+    --primary-press: #2e2b8c;
+    --primary-soft: #665efd;
+    --primary-subdued: #b9b9f9;
+    --canvas-soft: #f6f9fc;
+    --canvas-cream: #f5e9d4;
+    --hairline: #e3e8ee;
+    --ruby: #ea2261;
+    --magenta: #f96bee;
   }
 }
 
+* {
+  box-sizing: border-box;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--canvas-soft);
+  color: var(--ink);
+  font-feature-settings: "ss01";
+  font-family:
+    var(--font-kanit),
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    Roboto,
+    sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Atmospheric Gradient Mesh - signature design depth */
+.mesh-gradient {
+  background:
+    radial-gradient(at 0% 0%, rgba(245, 233, 212, 0.8) 0px, transparent 50%),
+    radial-gradient(at 50% 0%, rgba(185, 185, 249, 0.7) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(249, 107, 238, 0.4) 0px, transparent 50%),
+    radial-gradient(at 80% 50%, rgba(83, 58, 253, 0.15) 0px, transparent 50%),
+    linear-gradient(to bottom, #ffffff, #f6f9fc);
+}
+
+.mesh-gradient-dark {
+  background:
+    radial-gradient(at 0% 0%, rgba(83, 58, 253, 0.3) 0px, transparent 60%),
+    radial-gradient(at 100% 0%, rgba(234, 34, 97, 0.25) 0px, transparent 60%),
+    linear-gradient(135deg, #1c1e54 0%, #0d253d 100%);
+}
+
+/* Tabular numbers for financial & day counts */
+.tabular-nums {
+  font-feature-settings: "tnum";
+  letter-spacing: -0.02em;
+}
+
+/* Stripi Display Typography */
+.display-title {
+  font-weight: 300;
+  letter-spacing: -0.03em;
+}
+
+/* Date input - รองรับ LINE LIFF / Mobile WebView */
+.date-input-fixed {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  height: 40px;
+  min-height: 40px;
+  max-height: 40px;
+  box-sizing: border-box;
+  display: block;
+  appearance: none;
+  -webkit-appearance: none;
+  font-size: 14px;
+  line-height: 20px;
+  padding: 8px 12px;
+  border-radius: 9999px;
+}
+
+/* Android / Chrome / LINE WebView */
+.date-input-fixed::-webkit-date-and-time-value {
+  text-align: left;
+  height: 20px;
+  line-height: 20px;
+}
+
+.date-input-fixed::-webkit-calendar-picker-indicator {
+  margin: 0;
+  padding: 0;
+  width: 16px;
+  height: 16px;
+}
+
+/* ป้องกัน iOS/LINE WebView ขยาย input */
+@supports (-webkit-touch-callout: none) {
+  .date-input-fixed {
+    height: 40px;
+    min-height: 40px;
+    max-height: 40px;
+    line-height: 20px;
+  }
 }

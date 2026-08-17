@@ -1,0 +1,869 @@
+// =====================================================================
+// LALINK - ระบบลางานออนไลน์ Multi-Tenant SaaS ผ่าน LINE LIFF
+// Prisma Schema Definition (Prisma 7 / PostgreSQL)
+// =====================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------
+// ENUMS
+// ---------------------------------------------------------------------
+
+enum CompanyStatus {
+  ACTIVE
+  SUSPENDED
+  PENDING
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  RESIGNED
+  SUSPENDED
+  PROBATION
+  TERMINATED
+}
+
+enum LeaveRequestStatus {
+  DRAFT
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+  WITHDRAWN
+}
+
+enum LeavePeriod {
+  FULL_DAY
+  HALF_DAY_AM
+  HALF_DAY_PM
+}
+
+enum LeaveTransactionType {
+  CREDIT
+  DEBIT
+  ADJUSTMENT
+  REVERSAL
+}
+
+enum NotificationChannel {
+  LINE
+  EMAIL
+  IN_APP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIAL
+  CANCELLED
+  EXPIRED
+  PAST_DUE
+}
+
+enum ActorType {
+  USER
+  EMPLOYEE
+  SYSTEM
+}
+
+enum ApprovalStepStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  SKIPPED
+}
+
+enum SecurityEventSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+enum SystemLogLevel {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+// ---------------------------------------------------------------------
+// 1. TENANT & SUBSCRIPTION MODELS
+// ---------------------------------------------------------------------
+
+model Company {
+  id        String        @id @default(cuid())
+  code      String        @unique // รหัสย่อบริษัท เช่น DEMO, ACME
+  name      String        // ชื่อบริษัท
+  taxId     String?       // เลขประจำตัวผู้เสียภาษี
+  email     String?       // อีเมลติดต่อบริษัท
+  phone     String?       // เบอร์โทรศัพท์
+  address   String?       // ที่อยู่บริษัท
+  status    CompanyStatus @default(ACTIVE)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  // Relations
+  branches             Branch[]
+  users                User[]
+  employees            Employee[]
+  departments          Department[]
+  positions            Position[]
+  roles                Role[]
+  leaveTypes           LeaveType[]
+  leavePolicies        LeavePolicy[]
+  approvalWorkflows    ApprovalWorkflow[]
+  leaveBalances        LeaveBalance[]
+  leaveTransactions    LeaveTransaction[]
+  leaveRequests        LeaveRequest[]
+  leaveAttachments     LeaveAttachment[]
+  holidays             Holiday[]
+  notifications        Notification[]
+  notificationTemplates NotificationTemplate[]
+  announcements        Announcement[]
+  auditLogs            AuditLog[]
+  securityEvents       SecurityEvent[]
+  loginLogs            LoginLog[]
+  apiKeys              ApiKey[]
+  fileAccessLogs       FileAccessLog[]
+  subscription         Subscription?
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("companies")
+}
+
+model Branch {
+  id        String   @id @default(cuid())
+  companyId String
+  code      String   // รหัสสาขา เช่น HQ, BKK01
+  name      String   // สำนักงานใหญ่, สาขาสยาม
+  address   String?
+  phone     String?
+  isMain    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  departments   Department[]
+  employees     Employee[]
+  announcements Announcement[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@map("branches")
+}
+
+model Plan {
+  id           String   @id @default(cuid())
+  code         String   @unique // FREE, PRO, ENTERPRISE
+  name         String
+  description  String?
+  maxEmployees Int      @default(20)
+  maxAdmins    Int      @default(2)
+  priceMonthly Decimal  @default(0.0) @db.Decimal(10, 2)
+  priceYearly  Decimal  @default(0.0) @db.Decimal(10, 2)
+  features     Json?    // Feature flags & limits
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  subscriptions Subscription[]
+
+  @@map("plans")
+}
+
+model Subscription {
+  id           String             @id @default(cuid())
+  companyId    String             @unique
+  planId       String
+  status       SubscriptionStatus @default(TRIAL)
+  startDate    DateTime           @default(now())
+  endDate      DateTime?
+  trialEndsAt  DateTime?
+  cancelledAt  DateTime?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  plan    Plan    @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([status])
+  @@map("subscriptions")
+}
+
+// ---------------------------------------------------------------------
+// 2. USER, SESSIONS & RBAC
+// ---------------------------------------------------------------------
+
+model Role {
+  id          String   @id @default(cuid())
+  companyId   String?  // null สำหรับ Global System Roles
+  name        String   // ผู้ดูแลระบบระดับบริษัท, ฝ่ายบุคคล, หัวหน้างาน
+  code        String   // SYSTEM_ADMIN, COMPANY_ADMIN, HR_ADMIN, MANAGER, EMPLOYEE
+  description String?
+  isSystem    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  company         Company?         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  users           User[]
+  rolePermissions RolePermission[]
+
+  @@unique([companyId, code])
+  @@index([code])
+  @@map("roles")
+}
+
+model Permission {
+  id          String   @id @default(cuid())
+  code        String   @unique // เช่น leave.approve, employee.create
+  name        String   // อนุมัติใบลา, เพิ่มพนักงาน
+  module      String   // LEAVE, EMPLOYEE, COMPANY, REPORT, SYSTEM
+  description String?
+  createdAt   DateTime @default(now())
+
+  rolePermissions RolePermission[]
+
+  @@index([module])
+  @@map("permissions")
+}
+
+model RolePermission {
+  id           String   @id @default(cuid())
+  roleId       String
+  permissionId String
+  createdAt    DateTime @default(now())
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id           String     @id @default(cuid())
+  companyId    String?    // null สำหรับ Platform Super Admin
+  email        String     @unique
+  passwordHash String
+  name         String
+  status       UserStatus @default(ACTIVE)
+  roleId       String
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relations
+  company        Company?        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  role           Role            @relation(fields: [roleId], references: [id], onDelete: Restrict)
+  sessions       UserSession[]
+  loginLogs      LoginLog[]
+  leaveApprovals LeaveApproval[]
+
+  @@index([companyId])
+  @@index([email])
+  @@index([status])
+  @@map("users")
+}
+
+model UserSession {
+  id           String    @id @default(cuid())
+  userId       String
+  tokenHash    String    @unique
+  ipAddress    String?
+  userAgent    String?
+  device       String?   // Mobile, Desktop, Tablet
+  browser      String?   // Chrome, Safari, Firefox
+  os           String?   // Windows, macOS, iOS, Android
+  isRevoked    Boolean   @default(false)
+  lastActiveAt DateTime  @default(now())
+  expiresAt    DateTime
+  createdAt    DateTime  @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([tokenHash])
+  @@index([isRevoked])
+  @@map("user_sessions")
+}
+
+// ---------------------------------------------------------------------
+// 3. ORGANIZATION & EMPLOYEE
+// ---------------------------------------------------------------------
+
+model Department {
+  id        String   @id @default(cuid())
+  companyId String
+  branchId  String?
+  name      String
+  code      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch        Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  employees     Employee[]
+  announcements Announcement[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@index([branchId])
+  @@map("departments")
+}
+
+model Position {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  code      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  company   Company    @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employees Employee[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("positions")
+}
+
+model Employee {
+  id           String         @id @default(cuid())
+  companyId    String
+  branchId     String?
+  employeeCode String         // รหัสพนักงาน เช่น EMP-001
+  firstName    String         // ชื่อ
+  lastName     String         // นามสกุล
+  dateOfBirth  DateTime       // วันเดือนปีเกิด (Verify ตอน Link Account)
+  email        String?        // อีเมลพนักงาน
+  phone        String?        // เบอร์โทรศัพท์
+  departmentId String?
+  positionId   String?
+  managerId    String?        // หัวหน้าสายตรง
+  status       EmployeeStatus @default(ACTIVE)
+  lineUserId   String?        @unique // LINE User ID ที่เชื่อมโยงแล้ว (Unique 1 ต่อ 1)
+  avatarUrl    String?        // รูปโปรไฟล์ LINE
+  joinedAt     DateTime?      @default(now())
+  resignedAt   DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  // Relations
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch            Branch?            @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  department        Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  position          Position?          @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  manager           Employee?          @relation("ManagerSubordinates", fields: [managerId], references: [id], onDelete: SetNull)
+  subordinates      Employee[]         @relation("ManagerSubordinates")
+  leaveBalances     LeaveBalance[]
+  leaveTransactions LeaveTransaction[]
+  leaveRequests     LeaveRequest[]
+
+  @@unique([companyId, employeeCode])
+  @@index([companyId])
+  @@index([branchId])
+  @@index([managerId])
+  @@index([lineUserId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("employees")
+}
+
+// ---------------------------------------------------------------------
+// 4. LEAVE CONFIGURATION, POLICIES & WORKFLOWS
+// ---------------------------------------------------------------------
+
+model LeaveType {
+  id                     String   @id @default(cuid())
+  companyId              String
+  name                   String   // ลาป่วย, ลากิจ, ลาพักร้อน
+  code                   String   // SICK, PERSONAL, ANNUAL
+  color                  String?  @default("#533afd") // สีแสดงบนปฏิทิน
+  description            String?
+  defaultDays            Decimal  @default(0.0) @db.Decimal(5, 2)
+  allowHalfDay           Boolean  @default(true)
+  allowHourly            Boolean  @default(false)
+  allowCarryForward      Boolean  @default(false) // สะสมวันลาข้ามปี
+  maxCarryForwardDays    Decimal? @default(0.0) @db.Decimal(5, 2)
+  requireAttachment      Boolean  @default(false)
+  attachmentRequiredDays Decimal? @default(3.0) @db.Decimal(5, 2)
+  requireReason          Boolean  @default(true)
+  requireApproval        Boolean  @default(true)
+  allowPastDays          Int      @default(0) // อนุญาตยื่นลาย้อนหลังได้กี่วัน
+  minNoticeDays          Int      @default(0) // ต้องยื่นล่วงหน้ากี่วัน
+  isPaid                 Boolean  @default(true)
+  isActive               Boolean  @default(true)
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  // Relations
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leaveBalances     LeaveBalance[]
+  leaveTransactions LeaveTransaction[]
+  leaveRequests     LeaveRequest[]
+  leavePolicies     LeavePolicy[]
+  approvalWorkflows ApprovalWorkflow[]
+
+  @@unique([companyId, code])
+  @@index([companyId])
+  @@map("leave_types")
+}
+
+model LeavePolicy {
+  id                 String   @id @default(cuid())
+  companyId          String
+  leaveTypeId        String
+  name               String   // เช่น นโยบายพักร้อนอายุงาน 1-3 ปี
+  minTenureMonths    Int      @default(0)  // อายุงานขั้นต่ำ (เดือน)
+  maxTenureMonths    Int?                  // อายุงานสูงสุด (null = ไม่จำกัด)
+  allocatedDays      Decimal  @db.Decimal(5, 2) // จำนวนวันลาที่ได้รับตามอายุงาน
+  maxConsecutiveDays Int?     // ลาติดต่อกันได้สูงสุดกี่วัน
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([leaveTypeId])
+  @@map("leave_policies")
+}
+
+model ApprovalWorkflow {
+  id          String   @id @default(cuid())
+  companyId   String
+  leaveTypeId String?  // null = ใช้กับทุกประเภทการลา
+  name        String   // เช่น สายอนุมัติทั่วไป: หัวหน้างาน -> HR
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leaveType LeaveType?     @relation(fields: [leaveTypeId], references: [id], onDelete: SetNull)
+  steps     WorkflowStep[]
+
+  @@index([companyId])
+  @@map("approval_workflows")
+}
+
+model WorkflowStep {
+  id         String @id @default(cuid())
+  workflowId String
+  stepOrder  Int    // ลำดับขั้นตอน 1, 2, 3
+  roleCode   String // MANAGER, HR_ADMIN, COMPANY_ADMIN
+  name       String // เช่น "หัวหน้างานตรวจสอบ", "ฝ่ายบุคคลอนุมัติขั้นสุดท้าย"
+
+  // Relations
+  workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, stepOrder])
+  @@map("workflow_steps")
+}
+
+model LeaveBalance {
+  id                 String   @id @default(cuid())
+  companyId          String
+  employeeId         String
+  leaveTypeId        String
+  year               Int      // ปี ค.ศ. เช่น 2026
+  allocatedDays      Decimal  @default(0.0) @db.Decimal(5, 2)
+  usedDays           Decimal  @default(0.0) @db.Decimal(5, 2)
+  pendingDays        Decimal  @default(0.0) @db.Decimal(5, 2)
+  remainingDays      Decimal  @default(0.0) @db.Decimal(5, 2)
+  carriedForwardDays Decimal  @default(0.0) @db.Decimal(5, 2)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  // Relations
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee  Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType LeaveType @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, leaveTypeId, year])
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([year])
+  @@map("leave_balances")
+}
+
+model LeaveTransaction {
+  id             String               @id @default(cuid())
+  companyId      String
+  employeeId     String
+  leaveTypeId    String
+  leaveRequestId String?
+  type           LeaveTransactionType // CREDIT, DEBIT, ADJUSTMENT, REVERSAL
+  days           Decimal              @db.Decimal(5, 2)
+  balanceBefore  Decimal              @db.Decimal(5, 2)
+  balanceAfter   Decimal              @db.Decimal(5, 2)
+  reason         String?              // เหตุผลการปรับยอด
+  createdBy      String?              // User ID หรือ System
+  createdAt      DateTime             @default(now())
+
+  // Relations
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee     Employee      @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType    LeaveType     @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  leaveRequest LeaveRequest? @relation(fields: [leaveRequestId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([leaveRequestId])
+  @@index([createdAt])
+  @@map("leave_transactions")
+}
+
+model LeaveRequest {
+  id              String             @id @default(cuid())
+  companyId       String
+  employeeId      String
+  leaveTypeId     String
+  requestNumber   String             // เช่น LR-202608-0001
+  startDate       DateTime
+  endDate         DateTime
+  startPeriod     LeavePeriod        @default(FULL_DAY)
+  endPeriod       LeavePeriod        @default(FULL_DAY)
+  totalDays       Decimal            @db.Decimal(5, 2)
+  reason          String
+  status          LeaveRequestStatus @default(PENDING)
+  rejectionReason String?
+  approvedBy      String?
+  approvedAt      DateTime?
+  rejectedBy      String?
+  rejectedAt      DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  // Relations
+  company           Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee          Employee           @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  leaveType         LeaveType          @relation(fields: [leaveTypeId], references: [id], onDelete: Restrict)
+  attachments       LeaveAttachment[]
+  leaveTransactions LeaveTransaction[]
+  leaveApprovals    LeaveApproval[]
+
+  @@unique([companyId, requestNumber])
+  @@index([companyId])
+  @@index([employeeId])
+  @@index([status])
+  @@index([startDate, endDate])
+  @@index([createdAt])
+  @@map("leave_requests")
+}
+
+model LeaveApproval {
+  id             String             @id @default(cuid())
+  leaveRequestId String
+  approverId     String             // User ID
+  stepOrder      Int                @default(1)
+  status         ApprovalStepStatus @default(PENDING)
+  comment        String?
+  actedAt        DateTime?
+  createdAt      DateTime           @default(now())
+
+  // Relations
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+  approver     User         @relation(fields: [approverId], references: [id], onDelete: Restrict)
+
+  @@index([leaveRequestId])
+  @@index([approverId])
+  @@map("leave_approvals")
+}
+
+model LeaveAttachment {
+  id             String   @id @default(cuid())
+  companyId      String
+  leaveRequestId String
+  uploadedBy     String
+  originalName   String
+  objectKey      String
+  mimeType       String
+  size           Int
+  bucket         String
+  checksum       String?
+  createdAt      DateTime @default(now())
+
+  // Relations
+  company      Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([leaveRequestId])
+  @@map("leave_attachments")
+}
+
+model Holiday {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  date        DateTime @db.Date
+  year        Int
+  isRecurring Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, date])
+  @@index([companyId])
+  @@index([year])
+  @@map("holidays")
+}
+
+// ---------------------------------------------------------------------
+// 5. NOTIFICATIONS & ANNOUNCEMENTS
+// ---------------------------------------------------------------------
+
+model Notification {
+  id            String              @id @default(cuid())
+  companyId     String
+  recipientType ActorType
+  recipientId   String
+  channel       NotificationChannel @default(LINE)
+  title         String
+  message       String
+  status        NotificationStatus  @default(PENDING)
+  payload       Json?
+  error         String?
+  sentAt        DateTime?
+  createdAt     DateTime            @default(now())
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([recipientId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("notifications")
+}
+
+model NotificationTemplate {
+  id            String              @id @default(cuid())
+  companyId     String?             // null = ระบบกลาง
+  code          String              // LEAVE_REQUEST_SUBMITTED, LEAVE_APPROVED, LEAVE_REJECTED
+  name          String
+  channel       NotificationChannel @default(LINE)
+  titleTemplate String
+  bodyTemplate  String
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  // Relations
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, code, channel])
+  @@map("notification_templates")
+}
+
+model Announcement {
+  id           String    @id @default(cuid())
+  companyId    String
+  branchId     String?   // null = ทุกสาขา
+  departmentId String?   // null = ทุกแผนก
+  title        String
+  content      String
+  targetGroup  String    @default("ALL") // ALL, BRANCH, DEPARTMENT
+  isPublished  Boolean   @default(true)
+  publishedAt  DateTime  @default(now())
+  expiresAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  company    Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch     Branch?     @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  department Department? @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([targetGroup])
+  @@index([isPublished])
+  @@map("announcements")
+}
+
+// ---------------------------------------------------------------------
+// 6. AUDIT, SECURITY, SESSIONS & LOGS
+// ---------------------------------------------------------------------
+
+model AuditLog {
+  id         String    @id @default(cuid())
+  companyId  String?   // null สำหรับ System Admin Actions
+  actorType  ActorType
+  actorId    String?
+  action     String
+  resource   String
+  resourceId String?
+  details    Json?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime  @default(now())
+
+  // Relations
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([actorId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
+model SecurityEvent {
+  id        String                @id @default(cuid())
+  companyId String?
+  userId    String?
+  email     String?
+  eventType String                // FAILED_LOGIN, BRUTE_FORCE_ATTEMPT, INVALID_TOKEN, RATE_LIMIT_EXCEEDED
+  severity  SecurityEventSeverity @default(WARNING)
+  details   Json?
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime              @default(now())
+
+  // Relations
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([eventType])
+  @@index([severity])
+  @@index([createdAt])
+  @@map("security_events")
+}
+
+model LoginLog {
+  id        String   @id @default(cuid())
+  companyId String?
+  userId    String?
+  email     String
+  status    String   // SUCCESS, FAILED
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  // Relations
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([companyId])
+  @@index([email])
+  @@index([status])
+  @@index([createdAt])
+  @@map("login_logs")
+}
+
+model FileAccessLog {
+  id        String   @id @default(cuid())
+  companyId String
+  fileId    String
+  actorType ActorType
+  actorId   String
+  action    String   // DOWNLOAD, VIEW, DELETE
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([fileId])
+  @@index([createdAt])
+  @@map("file_access_logs")
+}
+
+// ---------------------------------------------------------------------
+// 7. SYSTEM SETTINGS, BACKUP, HEALTH & API KEYS (SYSTEM_ADMIN ONLY)
+// ---------------------------------------------------------------------
+
+model SystemSetting {
+  id          String   @id @default(cuid())
+  category    String   // GENERAL, SECURITY, EMAIL, LINE, MAINTENANCE
+  key         String   @unique
+  value       String   // JSON string or plain text
+  isPublic    Boolean  @default(false)
+  description String?
+  updatedAt   DateTime @updatedAt
+
+  @@index([category])
+  @@map("system_settings")
+}
+
+model SystemLog {
+  id        String         @id @default(cuid())
+  service   String         // APP, API, AUTH, DATABASE, STORAGE, LINE
+  level     SystemLogLevel @default(INFO)
+  message   String
+  details   Json?
+  ipAddress String?
+  createdAt DateTime       @default(now())
+
+  @@index([service])
+  @@index([level])
+  @@index([createdAt])
+  @@map("system_logs")
+}
+
+model BackupLog {
+  id          String    @id @default(cuid())
+  filename    String
+  sizeBytes   BigInt    @default(0)
+  status      String    // PENDING, COMPLETED, FAILED
+  triggerType String    // AUTOMATIC, MANUAL
+  checksum    String?
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("backup_logs")
+}
+
+model ApiKey {
+  id          String    @id @default(cuid())
+  companyId   String?   // null = Platform System Key
+  name        String
+  keyPrefix   String    // เช่น lal_live_abc
+  keyHash     String    @unique
+  permissions String[]  // Array of permission strings
+  lastUsedAt  DateTime?
+  expiresAt   DateTime?
+  isRevoked   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+
+  // Relations
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([isRevoked])
+  @@map("api_keys")
+}

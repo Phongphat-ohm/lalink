@@ -1,0 +1,82 @@
+import { getSession } from "@/lib/auth";
+import { redirect } from "next/navigation";
+import { prisma } from "@/lib/database";
+import { LeaveRequestsTable } from "@/components/admin/leave-requests-table";
+import { Badge } from "@/components/ui/badge";
+
+export default async function AdminLeaveRequestsPage() {
+  const session = await getSession();
+  if (!session || session.type !== "USER") {
+    redirect("/admin/login");
+  }
+
+  const leaveRequests = await prisma.leaveRequest.findMany({
+    where: { companyId: session.companyId! },
+    orderBy: { createdAt: "desc" },
+    include: {
+      employee: {
+        include: { department: true, position: true },
+      },
+      leaveType: true,
+    },
+  });
+
+  const serializedRequests = leaveRequests.map((req) => ({
+    id: req.id,
+    requestNumber: req.requestNumber,
+    startDate: req.startDate.toISOString(),
+    endDate: req.endDate.toISOString(),
+    startPeriod: req.startPeriod,
+    endPeriod: req.endPeriod,
+    totalDays: Number(req.totalDays),
+    reason: req.reason,
+    status: req.status,
+    rejectionReason: req.rejectionReason,
+    approvedBy: req.approvedBy,
+    createdAt: req.createdAt.toISOString(),
+    employee: {
+      id: req.employee.id,
+      employeeCode: req.employee.employeeCode,
+      firstName: req.employee.firstName,
+      lastName: req.employee.lastName,
+      email: req.employee.email,
+      phone: req.employee.phone,
+      department: req.employee.department
+        ? { name: req.employee.department.name }
+        : null,
+      position: req.employee.position
+        ? { name: req.employee.position.name }
+        : null,
+    },
+    leaveType: {
+      id: req.leaveType.id,
+      name: req.leaveType.name,
+      code: req.leaveType.code,
+      isPaid: req.leaveType.isPaid,
+    },
+  }));
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 border-b border-slate-200 pb-4">
+        <div>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">
+            รายการคำขอและการอนุมัติใบลา
+          </h1>
+          <p className="text-xs text-slate-500 mt-0.5">
+            คลิกที่รายการเพื่อดูรายละเอียดแบบเต็ม
+            หรือดำเนินการอนุมัติ/ไม่อนุมัติผ่าน Dialog
+          </p>
+        </div>
+        <Badge
+          variant="outline"
+          className="text-xs px-3 py-1 font-semibold w-fit"
+        >
+          ทั้งหมด {serializedRequests.length} รายการ
+        </Badge>
+      </div>
+
+      <LeaveRequestsTable initialRequests={serializedRequests} />
+    </div>
+  );
+}
