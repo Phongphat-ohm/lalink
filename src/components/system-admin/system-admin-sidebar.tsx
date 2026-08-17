@@ -145,14 +145,14 @@ export function SystemAdminSidebar({ userName }: SystemAdminSidebarProps) {
 
       {/* Desktop & Mobile Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-[#e3e8ee] bg-white text-[#0d253d] transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-[#e3e8ee] bg-white text-[#0d253d] transition-transform duration-200 ease-in-out lg:static lg:h-screen lg:shrink-0 lg:translate-x-0 ${
           isMobileOpen
             ? "translate-x-0 shadow-2xl"
             : "-translate-x-full lg:shadow-none"
         }`}
       >
         {/* Brand & Super Admin Badge */}
-        <div className="flex h-18 items-center justify-between border-b border-[#e3e8ee] px-5 bg-white">
+        <div className="flex h-18 shrink-0 items-center justify-between border-b border-[#e3e8ee] px-5 bg-white">
           <Link href="/system-admin" className="flex items-center space-x-3">
             <img
               src="/logo.png"
@@ -225,7 +225,7 @@ export function SystemAdminSidebar({ userName }: SystemAdminSidebarProps) {
         </div>
 
         {/* User Account & Logout Footer */}
-        <div className="border-t border-[#e3e8ee] p-3 bg-[#f6f9fc]/60">
+        <div className="shrink-0 border-t border-[#e3e8ee] p-3 bg-[#f6f9fc]/60">
           <div className="rounded-2xl border border-[#e3e8ee] bg-white p-3 shadow-xs">
             <div className="flex items-center space-x-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#533afd] text-white font-bold text-xs shadow-sm">

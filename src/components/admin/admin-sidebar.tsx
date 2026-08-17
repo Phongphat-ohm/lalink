@@ -161,9 +161,9 @@ export function AdminSidebarLayout({
   }
 
   return (
-    <div className="min-h-screen bg-[#f6f9fc] flex flex-col lg:flex-row">
+    <div className="h-screen overflow-hidden bg-[#f6f9fc] flex flex-col lg:flex-row text-[#0d253d]">
       {/* Mobile Top Header (Light Theme) */}
-      <header className="lg:hidden sticky top-0 z-40 flex h-16 items-center justify-between border-b border-[#e3e8ee] bg-white text-[#0d253d] px-4 shadow-xs">
+      <header className="lg:hidden shrink-0 flex h-16 items-center justify-between border-b border-[#e3e8ee] bg-white text-[#0d253d] px-4 shadow-xs z-40">
         <div className="flex items-center space-x-2.5">
           <img
             src="/logo.png"
@@ -204,14 +204,14 @@ export function AdminSidebarLayout({
 
       {/* Desktop & Mobile Sidebar - Clean Light Theme */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-[#e3e8ee] bg-white text-[#0d253d] transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-[#e3e8ee] bg-white text-[#0d253d] transition-transform duration-200 ease-in-out lg:static lg:h-screen lg:shrink-0 lg:translate-x-0 ${
           isMobileOpen
             ? "translate-x-0 shadow-2xl"
             : "-translate-x-full lg:shadow-none"
         }`}
       >
         {/* Brand & Organization Section */}
-        <div className="flex h-18 items-center justify-between border-b border-[#e3e8ee] px-5 bg-white">
+        <div className="flex h-18 shrink-0 items-center justify-between border-b border-[#e3e8ee] px-5 bg-white">
           <Link href="/admin/dashboard" className="flex items-center space-x-3">
             <img
               src="/logo.png"
@@ -290,7 +290,7 @@ export function AdminSidebarLayout({
         </div>
 
         {/* User Account & Logout Footer (Light Theme) */}
-        <div className="border-t border-[#e3e8ee] p-3 bg-[#f6f9fc]/60">
+        <div className="shrink-0 border-t border-[#e3e8ee] p-3 bg-[#f6f9fc]/60">
           <div className="rounded-2xl border border-[#e3e8ee] bg-white p-3 shadow-xs">
             <div className="flex items-center space-x-2.5">
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#533afd] text-white font-bold text-xs shadow-sm">
@@ -337,8 +337,8 @@ export function AdminSidebarLayout({
         onOpenChange={setIsPasswordModalOpen}
       />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      {/* Main Content Area - Independent Scroll */}
+      <div className="flex-1 flex flex-col min-w-0 h-full overflow-y-auto bg-[#f6f9fc]">
         <main className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl w-full mx-auto">
           {children}
         </main>
