@@ -28,17 +28,17 @@ import {
 } from "lucide-react";
 
 /**
- * Helper to ensure LIFF is fully initialized and ready before calling native APIs like scanCode
+ * Helper to ensure LIFF is initialized and ready before calling scanCodeV2
  */
 async function getReadyLiff() {
   const liffModule = (await import("@line/liff")).default;
   const targetLiffId = process.env.NEXT_PUBLIC_LIFF_ID || "";
 
-  if (targetLiffId && targetLiffId !== "dummy-liff-id") {
+  if (targetLiffId && targetLiffId !== "dummy-liff-id" && !liffModule.id) {
     try {
       await liffModule.init({ liffId: targetLiffId });
     } catch {
-      // If already initialized, init() may throw or resolve; ignore and wait for ready
+      // Ignore if already initialized
     }
   }
 
@@ -55,9 +55,9 @@ async function getReadyLiff() {
 
 export default function LiffConnectPage() {
   const router = useRouter();
-  const { liff, idToken, profile, isReady } = useLiff();
+  const { idToken, profile, isReady } = useLiff();
 
-  // Step 1: SCAN - รอการสแกนด้วยกล้อง LINE (LIFF ScanCode)
+  // Step 1: SCAN - รอการสแกนด้วยกล้อง LINE (LIFF ScanCodeV2)
   // Step 2: CONFIRM - ดึงข้อมูลบริษัทมาแสดงให้ผู้ใช้กดยืนยันว่าถูกต้องไหม
   // Step 3: EMPLOYEE - กรอกรหัสพนักงานและวันเกิดเพื่อผูกบัญชี
   const [currentStep, setCurrentStep] = React.useState<
@@ -129,7 +129,8 @@ export default function LiffConnectPage() {
     }
   }, [processScannedCode, scannedCompany]);
 
-  // เรียกใช้งานกล้องสแกนของ LINE โดย ensure init liff ให้พร้อม 100% ก่อนเรียกใช้งาน
+  // เรียกใช้งานกล้องสแกนตามมาตรฐาน liff.scanCodeV2()
+  // รองรับทั้ง LIFF Browser (เปิด Native Scanner) และ External Browser (เปิด WebRTC Camera + jsQR)
   const handleStartScan = React.useCallback(async () => {
     setErrorMessage(null);
 
@@ -141,74 +142,65 @@ export default function LiffConnectPage() {
 
       let result: any = null;
 
-      // 2. เรียกใช้งาน scanCodeV2 หรือ scanCode
+      // 2. เรียกใช้งาน liff.scanCodeV2() ตามมาตรฐาน LINE Official API
       if (typeof (liffInstance as any).scanCodeV2 === "function") {
-        try {
-          result = await (liffInstance as any).scanCodeV2();
-        } catch (v2Error: any) {
-          // หาก scanCodeV2 ไม่รองรับ ให้ fallback ไป scanCode
-          if (typeof (liffInstance as any).scanCode === "function") {
-            result = await (liffInstance as any).scanCode();
-          } else {
-            throw v2Error;
-          }
-        }
+        result = await (liffInstance as any).scanCodeV2();
       } else if (typeof (liffInstance as any).scanCode === "function") {
         result = await (liffInstance as any).scanCode();
       } else {
         setIsScanning(false);
-        setErrorMessage(
-          "ฟังก์ชัน Scan QR Code พร้อมใช้งานเมื่อเปิดผ่านแอปพลิเคชัน LINE บนมือถือเท่านั้น",
-        );
+        setErrorMessage("ฟังก์ชัน scanCodeV2 ยังไม่พร้อมใช้งานในอุปกรณ์นี้");
         return;
       }
 
       setIsScanning(false);
 
-      // 3. สกัดข้อความที่สแกนได้ ไม่ว่าจะเป็น string หรือ object
+      // 3. สกัดข้อมูล String จากผลลัพธ์ (ตามสเปก คืนค่าเป็น Promise<{ value: string }>)
       let scannedValue = "";
-      if (typeof result === "string") {
+      if (result && typeof result === "object" && result.value) {
+        scannedValue = result.value;
+      } else if (typeof result === "string") {
         scannedValue = result;
       } else if (result && typeof result === "object") {
         scannedValue =
-          result.value ||
-          result.data ||
-          result.qrCode ||
-          result.text ||
-          result.result ||
-          "";
-
-        if (!scannedValue) {
-          for (const key of Object.keys(result)) {
-            if (typeof result[key] === "string" && result[key].length > 0) {
-              scannedValue = result[key];
-              break;
-            }
-          }
-        }
+          result.data || result.qrCode || result.text || result.result || "";
       }
 
       if (scannedValue) {
         await processScannedCode(scannedValue);
+      } else {
+        setErrorMessage("ไม่พบข้อมูลจากการสแกน QR Code กรุณาลองใหม่อีกครั้ง");
       }
     } catch (err: any) {
       setIsScanning(false);
-      // ตรวจสอบกรณีผู้ใช้กดยกเลิกการสแกน
+
+      // ตรวจสอบกรณีผู้ใช้กดยกเลิกการสแกน (ไม่แสดง Error)
       if (
         err?.code === "USER_CANCEL" ||
+        err?.code === "CANCEL" ||
         err?.message === "User cancelled" ||
         err?.message === "canceled"
       ) {
         return;
       }
 
-      console.warn("LINE scan error:", err);
+      console.warn("LIFF scanCodeV2 error:", err);
+
       if (
-        err?.message?.includes("Failed to connect") ||
-        err?.message?.includes("not available")
+        err?.name === "NotAllowedError" ||
+        err?.message?.includes("Permission denied") ||
+        err?.message?.includes("permission")
       ) {
         setErrorMessage(
-          "ไม่สามารถเชื่อมต่อกล้องสแกน LINE ได้ กรุณาตรวจสอบการเปิดสิทธิ์ Scan QR ใน LINE Developers หรือเปิดผ่านแอป LINE บนมือถือ",
+          "กรุณาอนุญาตการเข้าถึงกล้อง (Camera Permission) ในเบราว์เซอร์เพื่อเปิดสแกน QR Code",
+        );
+      } else if (
+        err?.code === "FORBIDDEN" ||
+        err?.message?.includes("Scan QR") ||
+        err?.message?.includes("Failed to connect")
+      ) {
+        setErrorMessage(
+          "กรุณาเปิดสิทธิ์ [Scan QR] ในแท็บ LIFF บน LINE Developers Console หรือตั้งค่าขนาดหน้าจอ LIFF เป็น Full",
         );
       } else {
         setErrorMessage(
@@ -378,8 +370,8 @@ export default function LiffConnectPage() {
                           สแกนรหัสบริษัท (Company QR)
                         </h3>
                         <p className="text-xs text-[#64748d] max-w-xs mx-auto">
-                          กดปุ่มด้านล่างเพื่อเปิดกล้อง LINE สแกน QR Code
-                          จากฝ่ายบุคคล (HR)
+                          กดปุ่มด้านล่างเพื่อเปิดกล้องสแกน QR Code จากฝ่ายบุคคล
+                          (HR)
                         </p>
                       </div>
 
@@ -392,12 +384,12 @@ export default function LiffConnectPage() {
                         {isScanning || isFetchingCompany ? (
                           <>
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            กำลังอ่านข้อมูล QR Code...
+                            กำลังเปิดกล้องสแกน QR Code...
                           </>
                         ) : (
                           <>
                             <Camera className="mr-2 h-4 w-4" />
-                            เปิดกล้อง LINE สแกน QR Code บริษัท
+                            เปิดกล้องสแกน QR Code บริษัท
                           </>
                         )}
                       </Button>
