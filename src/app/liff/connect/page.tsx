@@ -27,6 +27,32 @@ import {
   Lock,
 } from "lucide-react";
 
+/**
+ * Helper to ensure LIFF is fully initialized and ready before calling native APIs like scanCode
+ */
+async function getReadyLiff() {
+  const liffModule = (await import("@line/liff")).default;
+  const targetLiffId = process.env.NEXT_PUBLIC_LIFF_ID || "";
+
+  if (targetLiffId && targetLiffId !== "dummy-liff-id") {
+    try {
+      await liffModule.init({ liffId: targetLiffId });
+    } catch {
+      // If already initialized, init() may throw or resolve; ignore and wait for ready
+    }
+  }
+
+  if ((liffModule as any).ready) {
+    try {
+      await (liffModule as any).ready;
+    } catch {
+      // Ignore
+    }
+  }
+
+  return liffModule;
+}
+
 export default function LiffConnectPage() {
   const router = useRouter();
   const { liff, idToken, profile, isReady } = useLiff();
@@ -103,25 +129,32 @@ export default function LiffConnectPage() {
     }
   }, [processScannedCode, scannedCompany]);
 
-  // เรียกใช้งานกล้องสแกนของ LINE (LIFF scanCode / scanCodeV2)
+  // เรียกใช้งานกล้องสแกนของ LINE โดย ensure init liff ให้พร้อม 100% ก่อนเรียกใช้งาน
   const handleStartScan = React.useCallback(async () => {
     setErrorMessage(null);
-
-    if (!liff) {
-      setErrorMessage("ระบบ LINE LIFF กำลังโหลด กรุณารอสักครู่");
-      return;
-    }
 
     try {
       setIsScanning(true);
 
+      // 1. Ensure LIFF is initialized & ready
+      const liffInstance = await getReadyLiff();
+
       let result: any = null;
 
-      // รองรับทั้ง liff.scanCode และ liff.scanCodeV2
-      if (typeof (liff as any).scanCode === "function") {
-        result = await (liff as any).scanCode();
-      } else if (typeof (liff as any).scanCodeV2 === "function") {
-        result = await (liff as any).scanCodeV2();
+      // 2. เรียกใช้งาน scanCodeV2 หรือ scanCode
+      if (typeof (liffInstance as any).scanCodeV2 === "function") {
+        try {
+          result = await (liffInstance as any).scanCodeV2();
+        } catch (v2Error: any) {
+          // หาก scanCodeV2 ไม่รองรับ ให้ fallback ไป scanCode
+          if (typeof (liffInstance as any).scanCode === "function") {
+            result = await (liffInstance as any).scanCode();
+          } else {
+            throw v2Error;
+          }
+        }
+      } else if (typeof (liffInstance as any).scanCode === "function") {
+        result = await (liffInstance as any).scanCode();
       } else {
         setIsScanning(false);
         setErrorMessage(
@@ -132,13 +165,27 @@ export default function LiffConnectPage() {
 
       setIsScanning(false);
 
-      // ดึงค่าผลลัพธ์จากการสแกน (รองรับทั้ง String ตรงๆ และ Object { value: "..." })
+      // 3. สกัดข้อความที่สแกนได้ ไม่ว่าจะเป็น string หรือ object
       let scannedValue = "";
       if (typeof result === "string") {
         scannedValue = result;
       } else if (result && typeof result === "object") {
         scannedValue =
-          result.value || result.data || result.qrCode || result.text || "";
+          result.value ||
+          result.data ||
+          result.qrCode ||
+          result.text ||
+          result.result ||
+          "";
+
+        if (!scannedValue) {
+          for (const key of Object.keys(result)) {
+            if (typeof result[key] === "string" && result[key].length > 0) {
+              scannedValue = result[key];
+              break;
+            }
+          }
+        }
       }
 
       if (scannedValue) {
@@ -146,7 +193,7 @@ export default function LiffConnectPage() {
       }
     } catch (err: any) {
       setIsScanning(false);
-      // ตรวจสอบกรณีผู้ใช้กดยกเลิกการสแกน (ไม่แสดง Error สีแดง)
+      // ตรวจสอบกรณีผู้ใช้กดยกเลิกการสแกน
       if (
         err?.code === "USER_CANCEL" ||
         err?.message === "User cancelled" ||
@@ -161,7 +208,7 @@ export default function LiffConnectPage() {
         err?.message?.includes("not available")
       ) {
         setErrorMessage(
-          "ไม่สามารถเปิดกล้องสแกน LINE ได้ กรุณาตรวจสอบการตั้งค่า Scan QR ใน LINE Developers หรือเปิดผ่านแอป LINE บนมือถือ",
+          "ไม่สามารถเชื่อมต่อกล้องสแกน LINE ได้ กรุณาตรวจสอบการเปิดสิทธิ์ Scan QR ใน LINE Developers หรือเปิดผ่านแอป LINE บนมือถือ",
         );
       } else {
         setErrorMessage(
@@ -169,7 +216,7 @@ export default function LiffConnectPage() {
         );
       }
     }
-  }, [liff, processScannedCode]);
+  }, [processScannedCode]);
 
   // ผู้ใช้กดยืนยันว่าข้อมูลบริษัทถูกต้อง
   function handleConfirmCompany() {
