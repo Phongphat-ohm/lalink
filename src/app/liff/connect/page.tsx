@@ -6,14 +6,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
 import { useLiff } from "@/components/liff";
 import { linkAccountAction } from "@/features/employee";
 import {
@@ -25,7 +17,6 @@ import {
   AlertCircle,
   QrCode,
   CheckCircle2,
-  Sparkles,
   Calendar,
   Building,
   UserCheck,
@@ -33,33 +24,27 @@ import {
   Camera,
   RotateCcw,
   Check,
-  X,
   Lock,
 } from "lucide-react";
 
 export default function LiffConnectPage() {
   const router = useRouter();
-  const { liff, idToken, profile, isReady, isInClient } = useLiff();
+  const { liff, idToken, profile, isReady } = useLiff();
 
-  // Multi-step flow state
-  // Step 1: Scan QR / Barcode
-  // Step 2: Confirm Company Details
-  // Step 3: Enter Employee ID & Date of Birth
+  // Step 1: SCAN - รอการสแกนด้วยกล้อง LINE
+  // Step 2: CONFIRM - ดึงข้อมูลบริษัทมาแสดงให้ผู้ใช้กดยืนยันว่าถูกต้องไหม
+  // Step 3: EMPLOYEE - กรอกรหัสพนักงานและวันเกิดเพื่อผูกบัญชี
   const [currentStep, setCurrentStep] = React.useState<
     "SCAN" | "CONFIRM" | "EMPLOYEE"
   >("SCAN");
 
-  // Scanned Company Data
+  // ข้อมูลบริษัทที่ได้จากการสแกน
   const [scannedCompany, setScannedCompany] =
     React.useState<ScannedCompanyInfo | null>(null);
   const [isScanning, setIsScanning] = React.useState(false);
   const [isFetchingCompany, setIsFetchingCompany] = React.useState(false);
 
-  // Web fallback scanner modal state (when testing in non-LINE browser)
-  const [isWebScannerOpen, setIsWebScannerOpen] = React.useState(false);
-  const [webSimulatedCode, setWebSimulatedCode] = React.useState("DEMO");
-
-  // Employee details state
+  // ข้อมูลพนักงาน
   const [employeeCode, setEmployeeCode] = React.useState("");
   const [dateOfBirth, setDateOfBirth] = React.useState("");
 
@@ -70,8 +55,10 @@ export default function LiffConnectPage() {
   >({});
   const [isSuccess, setIsSuccess] = React.useState(false);
 
-  // Process raw scanned code or URL
+  // ประมวลผลรหัสหรือ URL ที่ได้จากการสแกน
   const processScannedCode = React.useCallback(async (rawCode: string) => {
+    if (!rawCode || !rawCode.trim()) return;
+
     setIsFetchingCompany(true);
     setErrorMessage(null);
 
@@ -80,61 +67,82 @@ export default function LiffConnectPage() {
 
     if (!res.success || !res.data) {
       setErrorMessage(
-        res.message || "ไม่พบข้อมูลบริษัทจากรหัสที่สแกน กรุณาสแกนใหม่",
+        res.message || "ไม่พบข้อมูลบริษัทจากรหัสที่สแกน กรุณาสแกนใหม่อีกครั้ง",
       );
       setCurrentStep("SCAN");
       return;
     }
 
+    // ดึงข้อมูลบริษัทมาแสดงทันที
     setScannedCompany(res.data);
     setCurrentStep("CONFIRM");
   }, []);
 
-  // Trigger Scanner (LIFF Native Scanner with Web fallback)
+  // ตรวจสอบ Query Parameter เมื่อเปิดจาก LINE QR Direct Link
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const companyParam =
+      urlParams.get("company") ||
+      urlParams.get("code") ||
+      urlParams.get("companyCode");
+
+    if (companyParam && !scannedCompany) {
+      processScannedCode(companyParam);
+    }
+  }, [processScannedCode, scannedCompany]);
+
+  // เรียกใช้งานกล้องสแกนของ LINE (LIFF scanCodeV2 / scanCode)
   const handleStartScan = React.useCallback(async () => {
     setErrorMessage(null);
 
-    // 1. If running inside LINE App with LIFF scanCode capability
-    if (liff && isInClient) {
-      try {
-        setIsScanning(true);
-
-        if (typeof (liff as any).scanCodeV2 === "function") {
-          const result = await (liff as any).scanCodeV2();
-          setIsScanning(false);
-          if (result && result.value) {
-            await processScannedCode(result.value);
-            return;
-          }
-        } else if (typeof (liff as any).scanCode === "function") {
-          const result = await (liff as any).scanCode();
-          setIsScanning(false);
-          if (result && result.value) {
-            await processScannedCode(result.value);
-            return;
-          }
-        }
-        setIsScanning(false);
-      } catch (err: any) {
-        setIsScanning(false);
-        console.warn("LIFF Scan error:", err);
-        // Fallback to web camera modal
-        setIsWebScannerOpen(true);
-      }
-    } else {
-      // 2. In standard browser / Dev preview mode
-      setIsWebScannerOpen(true);
+    if (!liff) {
+      setErrorMessage("ระบบ LINE LIFF ยังไม่พร้อมทำงาน กรุณารอสักครู่");
+      return;
     }
-  }, [liff, isInClient, processScannedCode]);
 
-  // Confirm Company details
+    try {
+      setIsScanning(true);
+
+      // เรียกใช้งาน LIFF Scanner ของ LINE โดยตรง
+      if (typeof (liff as any).scanCodeV2 === "function") {
+        const result = await (liff as any).scanCodeV2();
+        setIsScanning(false);
+        if (result && result.value) {
+          await processScannedCode(result.value);
+        }
+      } else if (typeof (liff as any).scanCode === "function") {
+        const result = await (liff as any).scanCode();
+        setIsScanning(false);
+        if (result && result.value) {
+          await processScannedCode(result.value);
+        }
+      } else {
+        setIsScanning(false);
+        setErrorMessage(
+          "ฟังก์ชันสแกนโค้ดพร้อมใช้งานเฉพาะการเปิดผ่านแอป LINE เท่านั้น",
+        );
+      }
+    } catch (err: any) {
+      setIsScanning(false);
+      if (err?.code !== "USER_CANCEL") {
+        console.warn("LINE scan error:", err);
+        setErrorMessage(
+          err?.message || "ไม่สามารถเปิดกล้องสแกนได้ กรุณาลองใหม่อีกครั้ง",
+        );
+      }
+    }
+  }, [liff, processScannedCode]);
+
+  // ผู้ใช้กดยืนยันว่าข้อมูลบริษัทถูกต้อง
   function handleConfirmCompany() {
     if (!scannedCompany) return;
     setCurrentStep("EMPLOYEE");
     setErrorMessage(null);
   }
 
-  // Reject and Rescan
+  // ผู้ใช้กดไม่ถูกต้อง หรือต้องการสแกนใหม่
   function handleResetScan() {
     setScannedCompany(null);
     setCurrentStep("SCAN");
@@ -142,7 +150,7 @@ export default function LiffConnectPage() {
     handleStartScan();
   }
 
-  // Submit Final Verification Form
+  // ส่งข้อมูลผูกบัญชี
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!scannedCompany) {
@@ -250,7 +258,7 @@ export default function LiffConnectPage() {
                 </div>
               </div>
 
-              {/* Error Message */}
+              {/* Error Alert */}
               {errorMessage && (
                 <Alert variant="destructive" className="rounded-2xl">
                   <AlertCircle className="h-4 w-4" />
@@ -275,7 +283,7 @@ export default function LiffConnectPage() {
                 </div>
               ) : (
                 <>
-                  {/* STEP 1: SCAN COMPANY CODE */}
+                  {/* STEP 1: SCAN QR CODE WITH LINE */}
                   {currentStep === "SCAN" && (
                     <div className="space-y-4 py-3 text-center">
                       <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-[#533afd]/10 text-[#533afd]">
@@ -287,8 +295,8 @@ export default function LiffConnectPage() {
                           สแกนรหัสบริษัท (Company QR)
                         </h3>
                         <p className="text-xs text-[#64748d] max-w-xs mx-auto">
-                          เพื่อความปลอดภัย ระบบไม่อนุญาตให้พิมพ์รหัสบริษัทเอง
-                          กรุณาสแกน QR Code จากฝ่ายบุคคล (HR)
+                          กดปุ่มด้านล่างเพื่อเปิดกล้อง LINE สแกน QR Code
+                          จากฝ่ายบุคคล (HR)
                         </p>
                       </div>
 
@@ -296,7 +304,7 @@ export default function LiffConnectPage() {
                         type="button"
                         onClick={handleStartScan}
                         disabled={isScanning || isFetchingCompany}
-                        className="w-full h-12 rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white font-semibold text-sm shadow-md"
+                        className="w-full h-12 rounded-full bg-[#06c755] hover:bg-[#05b34c] text-white font-semibold text-sm shadow-md flex items-center justify-center"
                       >
                         {isScanning || isFetchingCompany ? (
                           <>
@@ -306,28 +314,28 @@ export default function LiffConnectPage() {
                         ) : (
                           <>
                             <Camera className="mr-2 h-4 w-4" />
-                            เปิดกล้องสแกน QR Code บริษัท
+                            เปิดกล้อง LINE สแกน QR Code บริษัท
                           </>
                         )}
                       </Button>
                     </div>
                   )}
 
-                  {/* STEP 2: CONFIRM COMPANY DETAILS */}
+                  {/* STEP 2: CONFIRM COMPANY DETAILS (ดึงข้อมูลมาแสดงให้ผู้ใช้ยืนยัน) */}
                   {currentStep === "CONFIRM" && scannedCompany && (
                     <div className="space-y-4 py-2">
                       <div className="text-center space-y-1">
-                        <span className="text-[10px] uppercase tracking-wider font-bold text-[#533afd] bg-[#533afd]/10 px-2.5 py-1 rounded-full">
-                          สแกนสำเร็จ • ตรวจสอบข้อมูล
+                        <span className="text-[10px] uppercase tracking-wider font-bold text-[#059669] bg-[#ecfdf5] border border-[#a7f3d0] px-3 py-1 rounded-full">
+                          ✓ สแกนสำเร็จ • ตรวจสอบข้อมูลบริษัท
                         </span>
                         <h3 className="font-bold text-[#0d253d] text-base pt-1">
                           ข้อมูลบริษัทของคุณถูกต้องหรือไม่?
                         </h3>
                       </div>
 
-                      {/* Scanned Company Preview Card */}
-                      <div className="bg-[#f6f9fc] border-2 border-[#533afd]/20 rounded-2xl p-4 space-y-2.5">
-                        <div className="flex items-start justify-between">
+                      {/* Card แสดงข้อมูลบริษัทที่ดึงมา */}
+                      <div className="bg-[#f6f9fc] border-2 border-[#533afd]/20 rounded-2xl p-4 space-y-2.5 shadow-xs">
+                        <div className="flex items-start justify-between gap-2">
                           <div className="space-y-0.5">
                             <span className="text-[10px] text-[#64748d] uppercase font-semibold">
                               ชื่อองค์กร / บริษัท:
@@ -336,7 +344,7 @@ export default function LiffConnectPage() {
                               {scannedCompany.name}
                             </h4>
                           </div>
-                          <span className="font-mono text-xs font-bold text-[#533afd] bg-white border border-[#e3e8ee] px-2.5 py-1 rounded-full shadow-2xs">
+                          <span className="font-mono text-xs font-bold text-[#533afd] bg-white border border-[#e3e8ee] px-2.5 py-1 rounded-full shadow-2xs shrink-0">
                             {scannedCompany.code}
                           </span>
                         </div>
@@ -348,12 +356,12 @@ export default function LiffConnectPage() {
                         )}
                       </div>
 
-                      {/* Action Buttons */}
+                      {/* ปุ่มยืนยัน หรือ สแกนใหม่ */}
                       <div className="space-y-2 pt-1">
                         <Button
                           type="button"
                           onClick={handleConfirmCompany}
-                          className="w-full h-11 rounded-full bg-[#059669] hover:bg-[#047857] text-white font-semibold text-xs sm:text-sm shadow-md"
+                          className="w-full h-11 rounded-full bg-[#059669] hover:bg-[#047857] text-white font-semibold text-xs sm:text-sm shadow-md flex items-center justify-center"
                         >
                           <Check className="mr-1.5 h-4 w-4" />
                           ถูกต้อง • ยืนยันบริษัทนี้
@@ -363,7 +371,7 @@ export default function LiffConnectPage() {
                           type="button"
                           variant="outline"
                           onClick={handleResetScan}
-                          className="w-full h-10 rounded-full border-[#fecdd3] text-[#ea2261] hover:bg-[#ffe4e6] font-semibold text-xs"
+                          className="w-full h-10 rounded-full border-[#fecdd3] text-[#ea2261] hover:bg-[#ffe4e6] font-semibold text-xs flex items-center justify-center"
                         >
                           <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
                           ไม่ถูกต้อง / สแกนใหม่อีกครั้ง
@@ -506,83 +514,6 @@ export default function LiffConnectPage() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Web Scanner / Simulated Scanner Modal (For desktop / web browser testing) */}
-      <Dialog open={isWebScannerOpen} onOpenChange={setIsWebScannerOpen}>
-        <DialogContent
-          onClose={() => setIsWebScannerOpen(false)}
-          className="max-w-md rounded-3xl p-6"
-        >
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
-              <Camera className="h-5 w-5 text-[#533afd] mr-2" />
-              จำลองการสแกน QR Code (Web Scanner)
-            </DialogTitle>
-            <DialogDescription className="text-xs text-[#64748d]">
-              (เมื่อเปิดผ่านแอป LINE บนมือถือ ระบบจะเปิดกล้องสแกนอัตโนมัติด้วย
-              LIFF Scan)
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 my-2">
-            <div className="p-4 bg-[#f6f9fc] border border-dashed border-[#533afd]/40 rounded-2xl text-center space-y-2">
-              <QrCode className="h-12 w-12 text-[#533afd] mx-auto animate-pulse" />
-              <p className="text-xs font-semibold text-[#0d253d]">
-                เลือกรหัส QR Code ของบริษัทที่ต้องการจำลองการสแกน
-              </p>
-              <div className="flex justify-center space-x-2 pt-1">
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => setWebSimulatedCode("DEMO")}
-                  className={`text-xs rounded-full px-3 h-8 ${
-                    webSimulatedCode === "DEMO"
-                      ? "bg-[#533afd] text-white font-bold"
-                      : "bg-white text-[#0d253d] border border-[#e3e8ee]"
-                  }`}
-                >
-                  DEMO (บริษัททดสอบ)
-                </Button>
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-[#0d253d]">
-                หรือระบุรหัสที่ได้จาก QR Code สแกนเนอร์:
-              </label>
-              <Input
-                value={webSimulatedCode}
-                onChange={(e) =>
-                  setWebSimulatedCode(e.target.value.toUpperCase())
-                }
-                placeholder="เช่น DEMO, COM892"
-                className="h-9 rounded-xl font-mono uppercase text-xs"
-              />
-            </div>
-
-            <DialogFooter className="pt-2 border-t border-[#e3e8ee] flex justify-end space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setIsWebScannerOpen(false)}
-                className="rounded-full text-xs h-9 px-4"
-              >
-                ยกเลิก
-              </Button>
-              <Button
-                type="button"
-                onClick={async () => {
-                  setIsWebScannerOpen(false);
-                  await processScannedCode(webSimulatedCode);
-                }}
-                className="rounded-full bg-[#533afd] text-white text-xs h-9 px-5 font-semibold"
-              >
-                จำลองผลการสแกน (Simulate Scan)
-              </Button>
-            </DialogFooter>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
