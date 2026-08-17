@@ -24,7 +24,9 @@ import {
   ShieldCheck,
   Smartphone,
   ExternalLink,
+  Download,
 } from "lucide-react";
+import { CompanyQrModal } from "@/components/admin/company-qr-modal";
 
 export interface SerializedCompanySettings {
   id: string;
@@ -58,6 +60,7 @@ export function AdminSettingsView({
     text: string;
   } | null>(null);
   const [copied, setCopied] = React.useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = React.useState(false);
 
   const liffUrl = liffId ? `https://liff.line.me/${liffId}` : "/liff/connect";
 
@@ -329,7 +332,7 @@ export function AdminSettingsView({
                 </div>
               </div>
 
-              <div className="rounded-xl bg-[#06c755]/10 border border-[#06c755]/20 p-3 space-y-1 text-[#06c755]">
+              <div className="rounded-xl bg-[#06c755]/10 border border-[#06c755]/20 p-3 space-y-2 text-[#06c755]">
                 <div className="flex items-center font-bold text-xs">
                   <QrCode className="h-4 w-4 mr-1.5" /> LINE LIFF Ready
                 </div>
@@ -337,6 +340,15 @@ export function AdminSettingsView({
                   พนักงานสามารถกดเข้า Rich Menu
                   หรือเปิดลิงก์เพื่อยื่นใบลาและเช็กโควตาได้ตลอด 24 ชม.
                 </p>
+
+                <Button
+                  type="button"
+                  onClick={() => setIsQrModalOpen(true)}
+                  className="w-full h-8 rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white text-xs font-semibold shadow-xs mt-1"
+                >
+                  <Download className="h-3.5 w-3.5 mr-1.5" />
+                  ดู & ดาวน์โหลด QR Code บริษัท
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -378,6 +390,14 @@ export function AdminSettingsView({
           </Card>
         </div>
       </div>
+
+      {/* Company QR Code Modal */}
+      <CompanyQrModal
+        open={isQrModalOpen}
+        onOpenChange={setIsQrModalOpen}
+        companyName={company.name}
+        companyCode={company.code}
+      />
     </div>
   );
 }

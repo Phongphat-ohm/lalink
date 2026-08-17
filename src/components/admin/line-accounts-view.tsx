@@ -25,8 +25,10 @@ import {
   Users,
   ShieldCheck,
   Building,
+  QrCode,
 } from "lucide-react";
 import { unlinkEmployeeLineAction } from "@/features/employee/line-actions";
+import { CompanyQrModal } from "@/components/admin/company-qr-modal";
 
 export interface SerializedLineEmployee {
   id: string;
@@ -42,14 +44,21 @@ export interface SerializedLineEmployee {
 
 interface LineAccountsViewProps {
   employees: SerializedLineEmployee[];
+  companyName?: string;
+  companyCode?: string;
 }
 
-export function LineAccountsView({ employees }: LineAccountsViewProps) {
+export function LineAccountsView({
+  employees,
+  companyName = "LALINK",
+  companyCode = "DEMO",
+}: LineAccountsViewProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = React.useState("");
   const [unlinkTarget, setUnlinkTarget] =
     React.useState<SerializedLineEmployee | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = React.useState(false);
 
   const connectedCount = employees.filter((e) => e.isConnected).length;
   const unlinkedCount = employees.length - connectedCount;
@@ -93,7 +102,15 @@ export function LineAccountsView({ employees }: LineAccountsViewProps) {
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            onClick={() => setIsQrModalOpen(true)}
+            className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white px-4 h-9 text-xs font-semibold shadow-xs"
+          >
+            <QrCode className="h-4 w-4 mr-1.5" />
+            QR Code ให้พนักงานสแกน
+          </Button>
+
           <div className="flex items-center space-x-1.5 bg-[#ecfdf5] border border-[#a7f3d0] px-3 py-1.5 rounded-full text-xs font-semibold text-[#059669]">
             <CheckCircle2 className="h-3.5 w-3.5" />
             <span>เชื่อมต่อแล้ว: {connectedCount} คน</span>
@@ -251,6 +268,14 @@ export function LineAccountsView({ employees }: LineAccountsViewProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Company QR Code Modal */}
+      <CompanyQrModal
+        open={isQrModalOpen}
+        onOpenChange={setIsQrModalOpen}
+        companyName={companyName}
+        companyCode={companyCode}
+      />
     </div>
   );
 }

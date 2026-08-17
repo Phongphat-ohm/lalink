@@ -24,9 +24,11 @@ import {
   Scale,
   Smartphone,
   Megaphone,
+  QrCode,
 } from "lucide-react";
 import { logoutAdminAction } from "@/features/auth";
 import { ChangePasswordModal } from "@/components/admin/change-password-modal";
+import { CompanyQrModal } from "@/components/admin/company-qr-modal";
 
 interface AdminSidebarProps {
   userName: string;
@@ -46,6 +48,7 @@ export function AdminSidebarLayout({
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
   const [isPasswordModalOpen, setIsPasswordModalOpen] = React.useState(false);
+  const [isQrModalOpen, setIsQrModalOpen] = React.useState(false);
 
   const navigationGroups = [
     {
@@ -310,6 +313,16 @@ export function AdminSidebarLayout({
               <Button
                 variant="outline"
                 size="sm"
+                onClick={() => setIsQrModalOpen(true)}
+                className="w-full h-8 text-xs font-semibold text-[#533afd] border-[#533afd]/30 bg-[#533afd]/5 hover:bg-[#533afd]/15 justify-center rounded-full"
+              >
+                <QrCode className="h-3.5 w-3.5 mr-1.5 text-[#533afd]" />
+                QR Code บริษัท
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={() => setIsPasswordModalOpen(true)}
                 className="w-full h-8 text-xs font-medium text-[#0d253d] border-[#e3e8ee] bg-[#f6f9fc] hover:bg-[#533afd]/10 hover:text-[#533afd] hover:border-[#533afd]/30 justify-center rounded-full"
               >
@@ -335,6 +348,14 @@ export function AdminSidebarLayout({
       <ChangePasswordModal
         open={isPasswordModalOpen}
         onOpenChange={setIsPasswordModalOpen}
+      />
+
+      {/* Company QR Code Modal */}
+      <CompanyQrModal
+        open={isQrModalOpen}
+        onOpenChange={setIsQrModalOpen}
+        companyName={companyName}
+        companyCode={companyCode}
       />
 
       {/* Main Content Area - Independent Scroll */}

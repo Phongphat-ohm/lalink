@@ -16,14 +16,20 @@ export default async function AdminLineAccountsPage() {
 
   const companyId = session.companyId!;
 
-  const employees = await prisma.employee.findMany({
-    where: { companyId },
-    include: {
-      department: { select: { name: true } },
-      position: { select: { name: true } },
-    },
-    orderBy: [{ lineUserId: "desc" }, { employeeCode: "asc" }],
-  });
+  const [company, employees] = await Promise.all([
+    prisma.company.findUnique({
+      where: { id: companyId },
+      select: { name: true, code: true },
+    }),
+    prisma.employee.findMany({
+      where: { companyId },
+      include: {
+        department: { select: { name: true } },
+        position: { select: { name: true } },
+      },
+      orderBy: [{ lineUserId: "desc" }, { employeeCode: "asc" }],
+    }),
+  ]);
 
   const serializedEmployees: SerializedLineEmployee[] = employees.map((e) => ({
     id: e.id,
@@ -37,5 +43,11 @@ export default async function AdminLineAccountsPage() {
     linkedAt: e.updatedAt.toISOString(),
   }));
 
-  return <LineAccountsView employees={serializedEmployees} />;
+  return (
+    <LineAccountsView
+      employees={serializedEmployees}
+      companyName={company?.name || "LALINK"}
+      companyCode={company?.code || "DEMO"}
+    />
+  );
 }
