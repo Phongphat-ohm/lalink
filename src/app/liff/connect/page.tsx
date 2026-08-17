@@ -31,7 +31,7 @@ export default function LiffConnectPage() {
   const router = useRouter();
   const { liff, idToken, profile, isReady } = useLiff();
 
-  // Step 1: SCAN - รอการสแกนด้วยกล้อง LINE
+  // Step 1: SCAN - รอการสแกนด้วยกล้อง LINE (LIFF ScanCode)
   // Step 2: CONFIRM - ดึงข้อมูลบริษัทมาแสดงให้ผู้ใช้กดยืนยันว่าถูกต้องไหม
   // Step 3: EMPLOYEE - กรอกรหัสพนักงานและวันเกิดเพื่อผูกบัญชี
   const [currentStep, setCurrentStep] = React.useState<
@@ -62,23 +62,33 @@ export default function LiffConnectPage() {
     setIsFetchingCompany(true);
     setErrorMessage(null);
 
-    const res = await getCompanyByScannedCodeAction(rawCode);
-    setIsFetchingCompany(false);
+    try {
+      const res = await getCompanyByScannedCodeAction(rawCode);
+      setIsFetchingCompany(false);
 
-    if (!res.success || !res.data) {
+      if (!res.success || !res.data) {
+        setErrorMessage(
+          res.message ||
+            "ไม่พบข้อมูลบริษัทจากรหัสที่สแกน กรุณาสแกนใหม่อีกครั้ง",
+        );
+        setCurrentStep("SCAN");
+        return;
+      }
+
+      // ดึงข้อมูลบริษัทมาแสดงทันที
+      setScannedCompany(res.data);
+      setCurrentStep("CONFIRM");
+    } catch (fetchErr) {
+      console.error("Fetch company error:", fetchErr);
+      setIsFetchingCompany(false);
       setErrorMessage(
-        res.message || "ไม่พบข้อมูลบริษัทจากรหัสที่สแกน กรุณาสแกนใหม่อีกครั้ง",
+        "เกิดข้อผิดพลาดในการค้นหาข้อมูลบริษัท กรุณาลองใหม่อีกครั้ง",
       );
       setCurrentStep("SCAN");
-      return;
     }
-
-    // ดึงข้อมูลบริษัทมาแสดงทันที
-    setScannedCompany(res.data);
-    setCurrentStep("CONFIRM");
   }, []);
 
-  // ตรวจสอบ Query Parameter เมื่อเปิดจาก LINE QR Direct Link
+  // ตรวจสอบ Query Parameter เมื่อเปิดจาก LINE Direct Link
   React.useEffect(() => {
     if (typeof window === "undefined") return;
 
@@ -93,41 +103,67 @@ export default function LiffConnectPage() {
     }
   }, [processScannedCode, scannedCompany]);
 
-  // เรียกใช้งานกล้องสแกนของ LINE (LIFF scanCodeV2 / scanCode)
+  // เรียกใช้งานกล้องสแกนของ LINE (LIFF scanCode / scanCodeV2)
   const handleStartScan = React.useCallback(async () => {
     setErrorMessage(null);
 
     if (!liff) {
-      setErrorMessage("ระบบ LINE LIFF ยังไม่พร้อมทำงาน กรุณารอสักครู่");
+      setErrorMessage("ระบบ LINE LIFF กำลังโหลด กรุณารอสักครู่");
       return;
     }
 
     try {
       setIsScanning(true);
 
-      // เรียกใช้งาน LIFF Scanner ของ LINE โดยตรง
-      if (typeof (liff as any).scanCodeV2 === "function") {
-        const result = await (liff as any).scanCodeV2();
-        setIsScanning(false);
-        if (result && result.value) {
-          await processScannedCode(result.value);
-        }
-      } else if (typeof (liff as any).scanCode === "function") {
-        const result = await (liff as any).scanCode();
-        setIsScanning(false);
-        if (result && result.value) {
-          await processScannedCode(result.value);
-        }
+      let result: any = null;
+
+      // รองรับทั้ง liff.scanCode และ liff.scanCodeV2
+      if (typeof (liff as any).scanCode === "function") {
+        result = await (liff as any).scanCode();
+      } else if (typeof (liff as any).scanCodeV2 === "function") {
+        result = await (liff as any).scanCodeV2();
       } else {
         setIsScanning(false);
         setErrorMessage(
-          "ฟังก์ชันสแกนโค้ดพร้อมใช้งานเฉพาะการเปิดผ่านแอป LINE เท่านั้น",
+          "ฟังก์ชัน Scan QR Code พร้อมใช้งานเมื่อเปิดผ่านแอปพลิเคชัน LINE บนมือถือเท่านั้น",
         );
+        return;
+      }
+
+      setIsScanning(false);
+
+      // ดึงค่าผลลัพธ์จากการสแกน (รองรับทั้ง String ตรงๆ และ Object { value: "..." })
+      let scannedValue = "";
+      if (typeof result === "string") {
+        scannedValue = result;
+      } else if (result && typeof result === "object") {
+        scannedValue =
+          result.value || result.data || result.qrCode || result.text || "";
+      }
+
+      if (scannedValue) {
+        await processScannedCode(scannedValue);
       }
     } catch (err: any) {
       setIsScanning(false);
-      if (err?.code !== "USER_CANCEL") {
-        console.warn("LINE scan error:", err);
+      // ตรวจสอบกรณีผู้ใช้กดยกเลิกการสแกน (ไม่แสดง Error สีแดง)
+      if (
+        err?.code === "USER_CANCEL" ||
+        err?.message === "User cancelled" ||
+        err?.message === "canceled"
+      ) {
+        return;
+      }
+
+      console.warn("LINE scan error:", err);
+      if (
+        err?.message?.includes("Failed to connect") ||
+        err?.message?.includes("not available")
+      ) {
+        setErrorMessage(
+          "ไม่สามารถเปิดกล้องสแกน LINE ได้ กรุณาตรวจสอบการตั้งค่า Scan QR ใน LINE Developers หรือเปิดผ่านแอป LINE บนมือถือ",
+        );
+      } else {
         setErrorMessage(
           err?.message || "ไม่สามารถเปิดกล้องสแกนได้ กรุณาลองใหม่อีกครั้ง",
         );
