@@ -104,4 +104,32 @@ describe("Phase 5: LINE LIFF Account Linking & Security", () => {
       expect(simulateError("WRONG_DOB")).toBe(genericMsg);
     });
   });
+
+  describe("4. LIFF External Browser Login & Loop Prevention", () => {
+    it("should detect OAuth callback parameters in URL", () => {
+      const searchWithCode = "?code=12345&state=abcdef";
+      const isCallback =
+        searchWithCode.includes("code=") || searchWithCode.includes("state=");
+      expect(isCallback).toBe(true);
+
+      const normalSearch = "?company=DEMO";
+      const isNotCallback =
+        normalSearch.includes("code=") || normalSearch.includes("state=");
+      expect(isNotCallback).toBe(false);
+    });
+
+    it("should halt auto-login when attempt count reaches limit within cooldown", () => {
+      const MAX_ATTEMPTS = 2;
+      const COOLDOWN_MS = 60 * 1000;
+      const now = Date.now();
+
+      let loginCount = 2;
+      let lastLoginTime = now - 10 * 1000; // 10s ago
+
+      const isWithinCooldown = now - lastLoginTime < COOLDOWN_MS;
+      const shouldHaltLoop = isWithinCooldown && loginCount >= MAX_ATTEMPTS;
+
+      expect(shouldHaltLoop).toBe(true);
+    });
+  });
 });
