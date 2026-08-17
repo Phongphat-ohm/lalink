@@ -79,11 +79,19 @@ export async function linkAccountAction(
       where: { code: companyCode },
     });
 
-    if (!company || company.status !== "ACTIVE") {
+    if (!company) {
       recordFailedAttempt(rateLimitKey);
       return {
         success: false,
-        message: GENERIC_LINK_ERROR,
+        message: `ไม่พบข้อมูลบริษัทสำหรับรหัส "${companyCode}" กรุณาตรวจสอบ QR Code`,
+      };
+    }
+
+    if (company.status !== "ACTIVE") {
+      recordFailedAttempt(rateLimitKey);
+      return {
+        success: false,
+        message: `บริษัท "${company.name}" ถูกระงับการใช้งานชั่วคราว กรุณาติดต่อผู้ดูแลระบบ`,
       };
     }
 
@@ -97,21 +105,56 @@ export async function linkAccountAction(
       },
     });
 
-    if (!employee || employee.status !== "ACTIVE") {
+    if (!employee) {
       recordFailedAttempt(rateLimitKey);
       return {
         success: false,
-        message: GENERIC_LINK_ERROR,
+        message: `ไม่พบรหัสพนักงาน "${employeeCode}" ในระบบของบริษัท ${company.name}`,
       };
     }
 
-    // 6. Verify Date of Birth (Strict check against DB)
-    const empDobFormatted = employee.dateOfBirth.toISOString().slice(0, 10);
-    if (empDobFormatted !== dateOfBirth) {
+    if (employee.status !== "ACTIVE") {
       recordFailedAttempt(rateLimitKey);
       return {
         success: false,
-        message: GENERIC_LINK_ERROR,
+        message: `สถานะพนักงาน (${employee.employeeCode}) ไม่พร้อมใช้งาน กรุณาติดต่อฝ่ายบุคคล (HR)`,
+      };
+    }
+
+    // 6. Verify Date of Birth (Robust check handling UTC/Local timezone and Buddhist Era years)
+    let normalizedInputDob = dateOfBirth.trim();
+    const dobParts = normalizedInputDob.split("-");
+    if (dobParts.length === 3) {
+      let yearNum = parseInt(dobParts[0], 10);
+      if (yearNum > 2400) {
+        yearNum -= 543; // Convert พ.ศ. (Buddhist Era) to ค.ศ. (Common Era)
+      }
+      normalizedInputDob = `${yearNum}-${dobParts[1].padStart(2, "0")}-${dobParts[2].padStart(2, "0")}`;
+    }
+
+    const empUtcDob = employee.dateOfBirth.toISOString().slice(0, 10);
+    const empLocalYear = employee.dateOfBirth.getFullYear();
+    const empLocalMonth = String(employee.dateOfBirth.getMonth() + 1).padStart(
+      2,
+      "0",
+    );
+    const empLocalDate = String(employee.dateOfBirth.getDate()).padStart(
+      2,
+      "0",
+    );
+    const empLocalDob = `${empLocalYear}-${empLocalMonth}-${empLocalDate}`;
+
+    const isDobMatched =
+      empUtcDob === normalizedInputDob ||
+      empLocalDob === normalizedInputDob ||
+      employee.dateOfBirth.toISOString().slice(0, 10) === dateOfBirth;
+
+    if (!isDobMatched) {
+      recordFailedAttempt(rateLimitKey);
+      return {
+        success: false,
+        message:
+          "วัน/เดือน/ปีเกิด ไม่ตรงกับข้อมูลที่ลงทะเบียนไว้ในระบบ HR กรุณาตรวจสอบอีกครั้ง",
       };
     }
 
@@ -125,7 +168,7 @@ export async function linkAccountAction(
       return {
         success: false,
         message:
-          "พนักงานนี้ได้เชื่อมต่อกับบัญชี LINE อื่นไปแล้ว กรุณาติดต่อ HR",
+          "พนักงานนี้ได้เชื่อมต่อกับบัญชี LINE อื่นไปแล้ว กรุณาติดต่อฝ่ายบุคคลเพื่อปลดล็อค",
       };
     }
 

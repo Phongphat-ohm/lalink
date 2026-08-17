@@ -81,27 +81,27 @@ describe("Phase 5: LINE LIFF Account Linking & Security", () => {
     });
   });
 
-  describe("3. Zero Information Leakage Policy", () => {
-    it("should use a generic error message regardless of which field is incorrect", () => {
-      const genericMsg =
-        "ไม่สามารถเชื่อมต่อบัญชีได้ กรุณาตรวจสอบข้อมูลอีกครั้ง";
+  describe("3. Robust Date of Birth Verification", () => {
+    it("should correctly normalize Thai Buddhist Era year (2538 -> 1995)", () => {
+      const rawBuddhistDate = "2538-05-15";
+      const parts = rawBuddhistDate.split("-");
+      let year = parseInt(parts[0], 10);
+      if (year > 2400) {
+        year -= 543;
+      }
+      const normalized = `${year}-${parts[1]}-${parts[2]}`;
+      expect(normalized).toBe("1995-05-15");
+    });
 
-      // Simulation: whether Company is wrong, Employee is wrong, or DOB is wrong:
-      // The return message must ALWAYS be generic to prevent user enumeration
-      const simulateError = (
-        reason: "WRONG_COMPANY" | "WRONG_EMP" | "WRONG_DOB",
-      ) => {
-        switch (reason) {
-          case "WRONG_COMPANY":
-          case "WRONG_EMP":
-          case "WRONG_DOB":
-            return genericMsg;
-        }
-      };
-
-      expect(simulateError("WRONG_COMPANY")).toBe(genericMsg);
-      expect(simulateError("WRONG_EMP")).toBe(genericMsg);
-      expect(simulateError("WRONG_DOB")).toBe(genericMsg);
+    it("should keep Common Era year unchanged (1995 -> 1995)", () => {
+      const rawCeDate = "1995-05-15";
+      const parts = rawCeDate.split("-");
+      let year = parseInt(parts[0], 10);
+      if (year > 2400) {
+        year -= 543;
+      }
+      const normalized = `${year}-${parts[1]}-${parts[2]}`;
+      expect(normalized).toBe("1995-05-15");
     });
   });
 
