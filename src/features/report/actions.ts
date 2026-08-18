@@ -4,11 +4,8 @@ import { prisma } from "@/lib/database";
 import { requireTenantContext } from "@/lib/tenant";
 import { generateCsvWithBom } from "./csv-exporter";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 export interface DepartmentStat {
   departmentName: string;

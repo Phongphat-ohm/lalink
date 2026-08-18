@@ -4,21 +4,19 @@ import { prisma } from "@/lib/database";
 import { requireTenantContext, scopedLeaveRequest } from "@/lib/tenant";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions/rbac";
 import { NotificationService } from "@/lib/notification";
+import { processApproval } from "@/lib/leave/approval-engine";
+import { resolveLeaveYear } from "@/lib/leave/leave-year";
+import type { ActionResult } from "@/lib/types";
 import {
   LeaveRequestStatus,
   LeaveTransactionType,
   ActorType,
 } from "@prisma/client";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  errors?: Record<string, string[]>;
-}
+export type { ActionResult };
 
 /**
- * Server action to approve a pending leave request.
+ * Server action to approve a leave request (single or multi-step).
  */
 export async function approveLeaveRequestAction(
   leaveRequestId: string,
@@ -53,71 +51,88 @@ export async function approveLeaveRequestAction(
       };
     }
 
-    const leaveDays = Number(request.totalDays);
-    const requestYear = request.startDate.getFullYear();
+    // 3. Atomic Transaction: advance workflow + balance on final approval
+    const outcome = await prisma.$transaction(async (tx) => {
+      const result = await processApproval(tx, {
+        leaveRequestId: request.id,
+        actor: {
+          userId: tenant.userId,
+          roleCode: tenant.role,
+        },
+        decision: "APPROVE",
+      });
 
-    // 3. Atomic Database Transaction
-    await prisma.$transaction(async (tx) => {
-      // Update Leave Request
+      const isFinal = result.isFinalized;
+      const isApproved = result.requestStatus === LeaveRequestStatus.APPROVED;
+
+      // Advance the request status to the outcome
       await tx.leaveRequest.update({
         where: { id: request.id },
         data: {
-          status: LeaveRequestStatus.APPROVED,
-          approvedBy: tenant.userId,
-          approvedAt: new Date(),
+          status: result.requestStatus,
+          ...(isApproved
+            ? { approvedBy: tenant.userId, approvedAt: new Date() }
+            : {}),
         },
       });
 
-      // Update Leave Balance (move from pending to used)
-      const balance = await tx.leaveBalance.findFirst({
-        where: {
-          companyId: tenant.companyId,
-          employeeId: request.employeeId,
-          leaveTypeId: request.leaveTypeId,
-          year: requestYear,
-        },
-      });
+      if (isFinal && isApproved) {
+        const leaveDays = Number(request.totalDays);
+        const leaveYear = await resolveLeaveYear(
+          tenant.companyId,
+          request.startDate,
+        );
+        const requestYear = leaveYear.year;
 
-      if (balance) {
-        await tx.leaveBalance.update({
-          where: { id: balance.id },
-          data: {
-            pendingDays: { decrement: leaveDays },
-            usedDays: { increment: leaveDays },
-          },
-        });
-
-        // Record Leave Balance Transaction
-        await tx.leaveTransaction.create({
-          data: {
+        const balance = await tx.leaveBalance.findFirst({
+          where: {
             companyId: tenant.companyId,
             employeeId: request.employeeId,
             leaveTypeId: request.leaveTypeId,
-            leaveRequestId: request.id,
-            type: LeaveTransactionType.DEBIT,
-            days: leaveDays,
-            balanceBefore: Number(balance.remainingDays) + leaveDays,
-            balanceAfter: Number(balance.remainingDays),
-            reason: `อนุมัติคำขอลาเลขที่ ${request.requestNumber}`,
-            createdBy: tenant.userId,
+            year: requestYear,
+          },
+        });
+
+        if (balance) {
+          await tx.leaveBalance.update({
+            where: { id: balance.id },
+            data: {
+              pendingDays: { decrement: leaveDays },
+              usedDays: { increment: leaveDays },
+            },
+          });
+
+          await tx.leaveTransaction.create({
+            data: {
+              companyId: tenant.companyId,
+              employeeId: request.employeeId,
+              leaveTypeId: request.leaveTypeId,
+              leaveRequestId: request.id,
+              type: LeaveTransactionType.DEBIT,
+              days: leaveDays,
+              balanceBefore: Number(balance.remainingDays) + leaveDays,
+              balanceAfter: Number(balance.remainingDays),
+              reason: `อนุมัติคำขอลาเลขที่ ${request.requestNumber}`,
+              createdBy: tenant.userId,
+            },
+          });
+        }
+
+        // Notify employee (final approval)
+        await tx.notification.create({
+          data: {
+            companyId: tenant.companyId,
+            recipientType: ActorType.EMPLOYEE,
+            recipientId: request.employeeId,
+            title: "ใบลาของคุณได้รับการอนุมัติแล้ว",
+            message: `คำขอลาเลขที่ ${request.requestNumber} ได้รับการอนุมัติเรียบร้อยแล้ว`,
+            payload: {
+              leaveRequestId: request.id,
+              requestNumber: request.requestNumber,
+            },
           },
         });
       }
-
-      // Create Notification for Employee
-      await tx.notification.create({
-        data: {
-          companyId: tenant.companyId,
-          recipientType: ActorType.EMPLOYEE,
-          recipientId: request.employeeId,
-          title: "ใบลาของคุณได้รับการอนุมัติแล้ว",
-          message: `คำขอลาเลขที่ ${request.requestNumber} ได้รับการอนุมัติเรียบร้อยแล้ว`,
-          payload: {
-            leaveRequestId: request.id,
-            requestNumber: request.requestNumber,
-          },
-        },
-      });
 
       // Record Audit Trail
       await tx.auditLog.create({
@@ -125,32 +140,46 @@ export async function approveLeaveRequestAction(
           companyId: tenant.companyId,
           actorType: ActorType.USER,
           actorId: tenant.userId,
-          action: "APPROVE_LEAVE",
+          action: isApproved && isFinal ? "APPROVE_LEAVE" : "APPROVE_LEAVE_STEP",
           resource: "LeaveRequest",
           resourceId: request.id,
           details: {
             requestNumber: request.requestNumber,
             employeeId: request.employeeId,
-            totalDays: leaveDays,
+            step: result.currentStep,
+            totalSteps: result.totalSteps,
+            workflowDriven: result.isWorkflowDriven,
           },
         },
       });
+
+      return result;
     });
 
     // 4. Non-blocking Notification Dispatch
-    NotificationService.notifyLeaveApproved(request.id).catch((err) => {
-      console.warn("Failed to dispatch leave approved notification:", err);
-    });
+    if (outcome.isFinalized) {
+      NotificationService.notifyLeaveApproved(request.id).catch((err) => {
+        console.warn("Failed to dispatch leave approved notification:", err);
+      });
+    }
 
     return {
       success: true,
-      message: "อนุมัติใบลาเรียบร้อยแล้ว",
+      message:
+        outcome.isFinalized
+          ? "อนุมัติใบลาเรียบร้อยแล้ว"
+          : `อนุมัติขั้นตอนที่ ${outcome.currentStep}/${outcome.totalSteps} แล้ว ใบลายังอยู่ในระหว่างการอนุมัติ`,
     };
   } catch (error) {
     console.error("Approve Leave Error:", error);
+    const message =
+      error instanceof Error &&
+      error.message.includes("is not assigned to you")
+        ? "คุณไม่มีสิทธิ์อนุมัติใบลาในขั้นตอนนี้"
+        : "เกิดข้อผิดพลาดในการอนุมัติใบลา";
     return {
       success: false,
-      message: "เกิดข้อผิดพลาดในการอนุมัติใบลา",
+      message,
     };
   }
 }
@@ -201,12 +230,18 @@ export async function rejectLeaveRequestAction(
       };
     }
 
-    const leaveDays = Number(request.totalDays);
-    const requestYear = request.startDate.getFullYear();
+    // 4. Atomic Transaction: advance workflow + restore balance
+    const outcome = await prisma.$transaction(async (tx) => {
+      const result = await processApproval(tx, {
+        leaveRequestId: request.id,
+        actor: {
+          userId: tenant.userId,
+          roleCode: tenant.role,
+        },
+        decision: "REJECT",
+        comment: rejectionReason.trim(),
+      });
 
-    // 4. Atomic Database Transaction
-    await prisma.$transaction(async (tx) => {
-      // Update Leave Request
       await tx.leaveRequest.update({
         where: { id: request.id },
         data: {
@@ -217,7 +252,13 @@ export async function rejectLeaveRequestAction(
         },
       });
 
-      // Restore Leave Balance (Move from pending back to remaining)
+      // Restore Balance (Move from pending back to remaining)
+      const leaveDays = Number(request.totalDays);
+      const leaveYear = await resolveLeaveYear(
+        tenant.companyId,
+        request.startDate,
+      );
+      const requestYear = leaveYear.year;
       const balance = await tx.leaveBalance.findFirst({
         where: {
           companyId: tenant.companyId,
@@ -237,7 +278,7 @@ export async function rejectLeaveRequestAction(
         });
       }
 
-      // Create Notification for Employee
+      // Notify employee
       await tx.notification.create({
         data: {
           companyId: tenant.companyId,
@@ -261,19 +302,25 @@ export async function rejectLeaveRequestAction(
           details: {
             requestNumber: request.requestNumber,
             employeeId: request.employeeId,
+            step: result.currentStep,
+            totalSteps: result.totalSteps,
             rejectionReason,
           },
         },
       });
+
+      return result;
     });
 
     // 5. Non-blocking Notification Dispatch
-    NotificationService.notifyLeaveRejected(
-      request.id,
-      rejectionReason.trim(),
-    ).catch((err) => {
-      console.warn("Failed to dispatch leave rejected notification:", err);
-    });
+    if (outcome.isFinalized) {
+      NotificationService.notifyLeaveRejected(
+        request.id,
+        rejectionReason.trim(),
+      ).catch((err) => {
+        console.warn("Failed to dispatch leave rejected notification:", err);
+      });
+    }
 
     return {
       success: true,
@@ -281,9 +328,14 @@ export async function rejectLeaveRequestAction(
     };
   } catch (error) {
     console.error("Reject Leave Error:", error);
+    const message =
+      error instanceof Error &&
+      error.message.includes("is not assigned to you")
+        ? "คุณไม่มีสิทธิ์ปฏิเสธใบลาในขั้นตอนนี้"
+        : "เกิดข้อผิดพลาดในการปฏิเสธใบลา";
     return {
       success: false,
-      message: "เกิดข้อผิดพลาดในการปฏิเสธใบลา",
+      message,
     };
   }
 }

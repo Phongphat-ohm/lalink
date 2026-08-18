@@ -1,6 +1,6 @@
-import { getSession } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/database";
+import { requireAdminPermission } from "@/lib/permissions/admin-access";
+import { PERMISSIONS } from "@/lib/permissions/rbac";
 import { HolidayView } from "@/components/admin/holiday-view";
 import { addHolidayAction } from "@/features/leave";
 import { revalidatePath } from "next/cache";
@@ -16,12 +16,7 @@ async function addHolidayServerAction(formData: FormData) {
 }
 
 export default async function AdminHolidaysPage() {
-  const session = await getSession();
-  if (!session || session.type !== "USER") {
-    redirect("/admin/login");
-  }
-
-  const companyId = session.companyId!;
+  const { companyId } = await requireAdminPermission(PERMISSIONS.HOLIDAY_MANAGE);
   const currentYear = new Date().getFullYear();
 
   const rawHolidays = await prisma.holiday.findMany({

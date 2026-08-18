@@ -1,6 +1,6 @@
-import { getSession } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/database";
+import { requireAdminPermission } from "@/lib/permissions/admin-access";
+import { PERMISSIONS } from "@/lib/permissions/rbac";
 import {
   AdminCalendarView,
   SerializedAdminCalendarLeave,
@@ -11,12 +11,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function AdminCalendarPage() {
-  const session = await getSession();
-  if (!session || session.type !== "USER") {
-    redirect("/admin/login");
-  }
-
-  const companyId = session.companyId!;
+  const { companyId } = await requireAdminPermission(PERMISSIONS.LEAVE_READ);
   const currentYear = new Date().getFullYear();
 
   const [leaveRequests, holidays, departments] = await Promise.all([

@@ -1,6 +1,6 @@
-import { getSession } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/database";
+import { requireAdminPermission } from "@/lib/permissions/admin-access";
+import { PERMISSIONS } from "@/lib/permissions/rbac";
 import {
   AnnouncementView,
   SerializedAnnouncement,
@@ -11,12 +11,9 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function AdminAnnouncementsPage() {
-  const session = await getSession();
-  if (!session || session.type !== "USER") {
-    redirect("/admin/login");
-  }
-
-  const companyId = session.companyId!;
+  const { companyId } = await requireAdminPermission(
+    PERMISSIONS.ANNOUNCEMENT_MANAGE,
+  );
 
   const [announcements, branches, departments] = await Promise.all([
     prisma.announcement.findMany({

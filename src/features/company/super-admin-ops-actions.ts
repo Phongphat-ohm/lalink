@@ -6,11 +6,8 @@ import { revalidatePath } from "next/cache";
 import { AuditLogger } from "@/lib/audit";
 import crypto from "crypto";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 /**
  * Super Admin: Force Revoke a user session

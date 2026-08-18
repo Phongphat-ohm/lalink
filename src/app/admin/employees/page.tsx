@@ -1,16 +1,11 @@
-import { getSession } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/database";
+import { requireAdminPermission } from "@/lib/permissions/admin-access";
+import { PERMISSIONS } from "@/lib/permissions/rbac";
 import { EmployeeTable } from "@/components/admin/employee-table";
 import { Badge } from "@/components/ui/badge";
 
 export default async function AdminEmployeesPage() {
-  const session = await getSession();
-  if (!session || session.type !== "USER") {
-    redirect("/admin/login");
-  }
-
-  const companyId = session.companyId!;
+  const { companyId } = await requireAdminPermission(PERMISSIONS.EMPLOYEE_READ);
 
   const [employees, departments, positions] = await Promise.all([
     prisma.employee.findMany({

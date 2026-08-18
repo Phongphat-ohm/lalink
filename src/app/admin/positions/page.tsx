@@ -1,6 +1,6 @@
-import { getSession } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/database";
+import { requireAdminPermission } from "@/lib/permissions/admin-access";
+import { PERMISSIONS } from "@/lib/permissions/rbac";
 import {
   PositionView,
   SerializedPositionItem,
@@ -9,12 +9,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function AdminPositionsPage() {
-  const session = await getSession();
-  if (!session || session.type !== "USER") {
-    redirect("/admin/login");
-  }
-
-  const companyId = session.companyId!;
+  const { companyId } = await requireAdminPermission(PERMISSIONS.POSITION_MANAGE);
 
   const positions = await prisma.position.findMany({
     where: { companyId },

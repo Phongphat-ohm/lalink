@@ -10,12 +10,8 @@ import {
 } from "@/lib/security/rate-limiter";
 import { createSession } from "@/lib/auth/session";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  errors?: Record<string, string[]>;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 const GENERIC_LINK_ERROR =
   "ไม่สามารถเชื่อมต่อบัญชีได้ กรุณาตรวจสอบข้อมูลอีกครั้ง";

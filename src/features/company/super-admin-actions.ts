@@ -6,12 +6,8 @@ import { createCompanyByAdminSchema } from "./schemas";
 import { hashPassword } from "@/lib/security/password";
 import { revalidatePath } from "next/cache";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  errors?: Record<string, string[]>;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 /**
  * Super Admin: Toggle company status (ACTIVE / SUSPENDED).

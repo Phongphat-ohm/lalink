@@ -1,5 +1,6 @@
-import { requireTenantContext } from "@/lib/tenant";
 import { prisma } from "@/lib/database";
+import { requireAdminPermission } from "@/lib/permissions/admin-access";
+import { PERMISSIONS } from "@/lib/permissions/rbac";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ShieldAlert } from "lucide-react";
@@ -7,10 +8,10 @@ import { ShieldAlert } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function AdminAuditLogsPage() {
-  const tenant = await requireTenantContext();
+  const { companyId } = await requireAdminPermission(PERMISSIONS.AUDIT_READ);
 
   const auditLogs = await prisma.auditLog.findMany({
-    where: { companyId: tenant.companyId },
+    where: { companyId },
     orderBy: { createdAt: "desc" },
     take: 50,
   });

@@ -1,6 +1,6 @@
-import { getSession } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/database";
+import { requireAdminPermission } from "@/lib/permissions/admin-access";
+import { PERMISSIONS } from "@/lib/permissions/rbac";
 import { LeaveTypeView } from "@/components/admin/leave-type-view";
 import { saveLeaveTypePolicyAction } from "@/features/leave";
 import { revalidatePath } from "next/cache";
@@ -15,12 +15,7 @@ async function saveTypeServerAction(formData: FormData) {
 }
 
 export default async function AdminLeaveTypesPage() {
-  const session = await getSession();
-  if (!session || session.type !== "USER") {
-    redirect("/admin/login");
-  }
-
-  const companyId = session.companyId!;
+  const { companyId } = await requireAdminPermission(PERMISSIONS.POLICY_MANAGE);
 
   const rawLeaveTypes = await prisma.leaveType.findMany({
     where: { companyId },

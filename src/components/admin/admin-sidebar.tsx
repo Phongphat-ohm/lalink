@@ -22,11 +22,13 @@ import {
   Briefcase,
   GitBranch,
   Scale,
+  CalendarRange,
   Smartphone,
   Megaphone,
   QrCode,
 } from "lucide-react";
 import { logoutAdminAction } from "@/features/auth";
+import { hasPermission, PERMISSIONS } from "@/lib/permissions/rbac";
 import { ChangePasswordModal } from "@/components/admin/change-password-modal";
 import { CompanyQrModal } from "@/components/admin/company-qr-modal";
 
@@ -63,11 +65,13 @@ export function AdminSidebarLayout({
           href: "/admin/calendar",
           label: "ปฏิทินวันลาองค์กร",
           icon: CalendarDays,
+          permission: PERMISSIONS.LEAVE_READ,
         },
         {
           href: "/admin/leave-requests",
           label: "การอนุมัติใบลา",
           icon: FileCheck,
+          permission: PERMISSIONS.LEAVE_APPROVE,
         },
       ],
     },
@@ -78,21 +82,25 @@ export function AdminSidebarLayout({
           href: "/admin/employees",
           label: "ข้อมูลพนักงาน",
           icon: Users,
+          permission: PERMISSIONS.EMPLOYEE_READ,
         },
         {
           href: "/admin/departments",
           label: "แผนกงาน",
           icon: Building,
+          permission: PERMISSIONS.ORGANIZATION_MANAGE,
         },
         {
           href: "/admin/positions",
           label: "ตำแหน่งงาน",
           icon: Briefcase,
+          permission: PERMISSIONS.POSITION_MANAGE,
         },
         {
           href: "/admin/branches",
           label: "สาขาองค์กร",
           icon: GitBranch,
+          permission: PERMISSIONS.BRANCH_MANAGE,
         },
       ],
     },
@@ -103,16 +111,25 @@ export function AdminSidebarLayout({
           href: "/admin/leave-types",
           label: "นโยบายประเภทการลา",
           icon: Sparkles,
+          permission: PERMISSIONS.POLICY_MANAGE,
         },
         {
           href: "/admin/leave-balance",
           label: "โควตาและยอดวันลา",
           icon: Scale,
+          permission: PERMISSIONS.POLICY_MANAGE,
+        },
+        {
+          href: "/admin/leave-years",
+          label: "ปีลางาน",
+          icon: CalendarRange,
+          permission: PERMISSIONS.POLICY_MANAGE,
         },
         {
           href: "/admin/holidays",
           label: "ปฏิทินวันหยุดบริษัท",
           icon: CalendarDays,
+          permission: PERMISSIONS.HOLIDAY_MANAGE,
         },
       ],
     },
@@ -123,11 +140,13 @@ export function AdminSidebarLayout({
           href: "/admin/line-accounts",
           label: "บัญชี LINE ที่เชื่อมต่อ",
           icon: Smartphone,
+          permission: PERMISSIONS.LINE_MANAGE,
         },
         {
           href: "/admin/announcements",
           label: "ประกาศและข่าวสาร",
           icon: Megaphone,
+          permission: PERMISSIONS.ANNOUNCEMENT_MANAGE,
         },
       ],
     },
@@ -138,11 +157,13 @@ export function AdminSidebarLayout({
           href: "/admin/reports",
           label: "รายงานและสถิติ",
           icon: BarChart3,
+          permission: PERMISSIONS.REPORT_READ,
         },
         {
           href: "/admin/audit-logs",
           label: "บันทึกประวัติการทำงาน",
           icon: ShieldAlert,
+          permission: PERMISSIONS.AUDIT_READ,
         },
       ],
     },
@@ -150,13 +171,27 @@ export function AdminSidebarLayout({
       group: "ระบบ & นโยบาย",
       items: [
         {
+          href: "/admin/users",
+          label: "ผู้ใช้เข้าสู่ระบบ",
+          icon: KeyRound,
+          permission: PERMISSIONS.USER_MANAGE,
+        },
+        {
           href: "/admin/settings",
           label: "ตั้งค่าระบบองค์กร",
           icon: Settings,
+          permission: PERMISSIONS.COMPANY_UPDATE,
         },
       ],
     },
-  ];
+  ].map((grp) => ({
+    ...grp,
+    items: grp.items.filter(
+      (item) =>
+        !item.permission || hasPermission(userRole, item.permission),
+    ),
+  }))
+  .filter((grp) => grp.items.length > 0);
 
   async function handleLogout() {
     await logoutAdminAction();

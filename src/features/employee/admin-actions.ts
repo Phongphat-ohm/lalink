@@ -10,12 +10,8 @@ import {
 import { hasPermission, PERMISSIONS } from "@/lib/permissions/rbac";
 import { ActorType, EmployeeStatus } from "@prisma/client";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  errors?: Record<string, string[]>;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 const createEmployeeAdminSchema = z.object({
   employeeCode: z.string().min(1, "กรุณาระบุรหัสพนักงาน").trim().toUpperCase(),

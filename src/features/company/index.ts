@@ -9,4 +9,4 @@ export {
   superAdminResetUserPasswordAction,
 } from "./super-admin-actions";
 export { updateCompanySettingsAction } from "./settings-actions";
-export type { ActionResult } from "./register-actions";
+export type { ActionResult } from "@/lib/types";

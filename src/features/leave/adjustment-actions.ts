@@ -7,12 +7,8 @@ import { z } from "zod";
 import { AuditLogger } from "@/lib/audit";
 import { Prisma } from "@prisma/client";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  errors?: Record<string, string[]>;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 const adjustmentSchema = z.object({
   employeeId: z.string().min(1, "กรุณาระบุพนักงาน"),

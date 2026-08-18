@@ -5,4 +5,11 @@ export {
   rejectLeaveRequestAction,
 } from "./approval-actions";
 export { saveLeaveTypePolicyAction, addHolidayAction } from "./policy-actions";
-export type { ActionResult } from "./actions";
+export {
+  saveLeaveYearAction,
+  activateLeaveYearAction,
+  deleteLeaveYearAction,
+  runCarryForwardAction,
+  enqueueCarryForwardJobAction,
+} from "./leave-year-actions";
+export type { ActionResult } from "@/lib/types";

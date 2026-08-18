@@ -5,13 +5,10 @@ import { companyRegisterSchema } from "./schemas";
 import { generateUniqueCompanyCode } from "./code-generator";
 import { hashPassword } from "@/lib/security/password";
 import { AuditLogger } from "@/lib/audit";
+import { ensureStandardCompanyRoles } from "@/lib/tenant/ensure-roles";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  errors?: Record<string, string[]>;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 /**
  * Server action to generate a fresh unique company code for registration form.
@@ -323,20 +320,24 @@ export async function registerCompanyAction(
         },
       });
 
-      // 5.2 Ensure ADMIN Role exists
-      let adminRole = await tx.role.findFirst({
-        where: { code: "ADMIN" },
+      // 5.2 Create Company Roles
+      // Seed the standard company-scoped roles (COMPANY_ADMIN, HR, MANAGER,
+      // EMPLOYEE) plus a company-scoped ADMIN alias for the registering owner.
+      const adminRole = await tx.role.upsert({
+        where: {
+          companyId_code: { companyId: newCompany.id, code: "ADMIN" },
+        },
+        update: { name: "ผู้ดูแลระบบ" },
+        create: {
+          companyId: newCompany.id,
+          code: "ADMIN",
+          name: "ผู้ดูแลระบบ",
+          description: "สิทธิ์การดูแลระบบและจัดการข้อมูลองค์กร",
+          isSystem: true,
+        },
       });
 
-      if (!adminRole) {
-        adminRole = await tx.role.create({
-          data: {
-            code: "ADMIN",
-            name: "ผู้ดูแลระบบ",
-            description: "สิทธิ์การดูแลระบบและจัดการข้อมูลองค์กร",
-          },
-        });
-      }
+      await ensureStandardCompanyRoles(newCompany.id, tx);
 
       // 5.3 Create Admin User
       const newAdminUser = await tx.user.create({

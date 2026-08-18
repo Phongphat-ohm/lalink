@@ -49,6 +49,7 @@ enum LeavePeriod {
   FULL_DAY
   HALF_DAY_AM
   HALF_DAY_PM
+  HOURLY
 }
 
 enum LeaveTransactionType {
@@ -56,6 +57,8 @@ enum LeaveTransactionType {
   DEBIT
   ADJUSTMENT
   REVERSAL
+  CARRY_FORWARD
+  EXPIRATION
 }
 
 enum NotificationChannel {
@@ -144,6 +147,8 @@ model Company {
   loginLogs            LoginLog[]
   apiKeys              ApiKey[]
   fileAccessLogs       FileAccessLog[]
+  workSchedules        WorkSchedule[]
+  leaveYears           LeaveYear[]
   subscription         Subscription?
 
   @@index([status])
@@ -167,6 +172,7 @@ model Branch {
   departments   Department[]
   employees     Employee[]
   announcements Announcement[]
+  workSchedules WorkSchedule[]
 
   @@unique([companyId, code])
   @@index([companyId])
@@ -280,6 +286,7 @@ model User {
   sessions       UserSession[]
   loginLogs      LoginLog[]
   leaveApprovals LeaveApproval[]
+  passwordHistory PasswordHistory[]
 
   @@index([companyId])
   @@index([email])
@@ -328,6 +335,7 @@ model Department {
   branch        Branch?        @relation(fields: [branchId], references: [id], onDelete: SetNull)
   employees     Employee[]
   announcements Announcement[]
+  workSchedules WorkSchedule[]
 
   @@unique([companyId, name])
   @@index([companyId])
@@ -368,6 +376,7 @@ model Employee {
   status       EmployeeStatus @default(ACTIVE)
   lineUserId   String?        @unique // LINE User ID ที่เชื่อมโยงแล้ว (Unique 1 ต่อ 1)
   avatarUrl    String?        // รูปโปรไฟล์ LINE
+  photoUrl     String?        // รูปพนักงาน (not just LINE avatar)
   joinedAt     DateTime?      @default(now())
   resignedAt   DateTime?
   createdAt    DateTime       @default(now())
@@ -383,6 +392,7 @@ model Employee {
   leaveBalances     LeaveBalance[]
   leaveTransactions LeaveTransaction[]
   leaveRequests     LeaveRequest[]
+  workSchedules     WorkSchedule[]
 
   @@unique([companyId, employeeCode])
   @@index([companyId])
@@ -552,6 +562,7 @@ model LeaveRequest {
   startPeriod     LeavePeriod        @default(FULL_DAY)
   endPeriod       LeavePeriod        @default(FULL_DAY)
   totalDays       Decimal            @db.Decimal(5, 2)
+  hours           Decimal?           @db.Decimal(5, 2) // จำนวนชั่วโมงสำหรับการลาแบบ HOURLY
   reason          String
   status          LeaveRequestStatus @default(PENDING)
   rejectionReason String?
@@ -575,6 +586,8 @@ model LeaveRequest {
   @@index([companyId])
   @@index([employeeId])
   @@index([status])
+  @@index([companyId, status])
+  @@index([employeeId, status])
   @@index([startDate, endDate])
   @@index([createdAt])
   @@map("leave_requests")
@@ -583,8 +596,9 @@ model LeaveRequest {
 model LeaveApproval {
   id             String             @id @default(cuid())
   leaveRequestId String
-  approverId     String             // User ID
+  approverId     String?            // User ID of who acted (null while pending)
   stepOrder      Int                @default(1)
+  roleCode       String?            // Role required for this step (from WorkflowStep)
   status         ApprovalStepStatus @default(PENDING)
   comment        String?
   actedAt        DateTime?
@@ -592,7 +606,7 @@ model LeaveApproval {
 
   // Relations
   leaveRequest LeaveRequest @relation(fields: [leaveRequestId], references: [id], onDelete: Cascade)
-  approver     User         @relation(fields: [approverId], references: [id], onDelete: Restrict)
+  approver     User?        @relation(fields: [approverId], references: [id], onDelete: SetNull)
 
   @@index([leaveRequestId])
   @@index([approverId])
@@ -653,6 +667,8 @@ model Notification {
   title         String
   message       String
   status        NotificationStatus  @default(PENDING)
+  isRead        Boolean             @default(false)
+  readAt        DateTime?
   payload       Json?
   error         String?
   sentAt        DateTime?
@@ -663,6 +679,7 @@ model Notification {
 
   @@index([companyId])
   @@index([recipientId])
+  @@index([recipientId, isRead])
   @@index([status])
   @@index([createdAt])
   @@map("notifications")
@@ -695,6 +712,7 @@ model Announcement {
   content      String
   targetGroup  String    @default("ALL") // ALL, BRANCH, DEPARTMENT
   isPublished  Boolean   @default(true)
+  isPinned     Boolean   @default(false)
   publishedAt  DateTime  @default(now())
   expiresAt    DateTime?
   createdAt    DateTime  @default(now())
@@ -708,6 +726,7 @@ model Announcement {
   @@index([companyId])
   @@index([targetGroup])
   @@index([isPublished])
+  @@index([companyId, isPublished, publishedAt])
   @@map("announcements")
 }
 
@@ -866,4 +885,105 @@ model ApiKey {
   @@index([companyId])
   @@index([isRevoked])
   @@map("api_keys")
+}
+
+// ---------------------------------------------------------------------
+// 8. WORK SCHEDULE, LEAVE YEAR & PASSWORD HISTORY (PHASE 1 ADDITIONS)
+// ---------------------------------------------------------------------
+
+enum WorkScheduleScope {
+  COMPANY
+  BRANCH
+  DEPARTMENT
+  EMPLOYEE
+}
+
+model WorkSchedule {
+  id             String            @id @default(cuid())
+  companyId      String
+  name           String            // เช่น "มาตรฐาน จ-ศ 08:30-17:30"
+  description    String?
+  scope          WorkScheduleScope @default(COMPANY)
+  branchId       String?           // เมื่อ scope = BRANCH
+  departmentId   String?           // เมื่อ scope = DEPARTMENT
+  employeeId     String?           // เมื่อ scope = EMPLOYEE
+  isActive       Boolean           @default(true)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  // Relations
+  company      Company?        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch       Branch?         @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  department   Department?     @relation(fields: [departmentId], references: [id], onDelete: Cascade)
+  employee     Employee?       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  entries      WorkScheduleEntry[]
+
+  @@index([companyId])
+  @@index([branchId])
+  @@index([departmentId])
+  @@index([employeeId])
+  @@map("work_schedules")
+}
+
+model WorkScheduleEntry {
+  id             String   @id @default(cuid())
+  workScheduleId String
+  dayOfWeek      Int      // 0=อาทิตย์ ... 6=เสาร์ (JS Date.getDay())
+  startTime      String   // เช่น "08:30"
+  endTime        String   // เช่น "17:30"
+  isWorkingDay   Boolean  @default(true)
+  createdAt      DateTime @default(now())
+
+  // Relations
+  workSchedule WorkSchedule @relation(fields: [workScheduleId], references: [id], onDelete: Cascade)
+
+  @@unique([workScheduleId, dayOfWeek])
+  @@map("work_schedule_entries")
+}
+
+model LeaveYear {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String   // เช่น "FY2026", "LEAVE YEAR 2026/2027"
+  year      Int      // ปีที่ใช้เป็น key ใน LeaveBalance.year
+  startDate DateTime @db.Date
+  endDate   DateTime @db.Date
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, name])
+  @@unique([companyId, year])
+  @@index([companyId])
+  @@index([startDate, endDate])
+  @@map("leave_years")
+}
+
+model PasswordHistory {
+  id           String   @id @default(cuid())
+  userId       String
+  passwordHash String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("password_history")
+}
+
+model RateLimitEntry {
+  id             String    @id @default(cuid())
+  key            String    @unique
+  attempts       Int       @default(0)
+  lockedUntil    DateTime?
+  firstAttemptAt DateTime  @default(now())
+  lastAttemptAt  DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@map("rate_limit_entries")
 }

@@ -1,17 +1,12 @@
-import { getSession } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/database";
+import { requireAdminPermission } from "@/lib/permissions/admin-access";
+import { PERMISSIONS } from "@/lib/permissions/rbac";
 import { BranchView, SerializedBranch } from "@/components/admin/branch-view";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminBranchesPage() {
-  const session = await getSession();
-  if (!session || session.type !== "USER") {
-    redirect("/admin/login");
-  }
-
-  const companyId = session.companyId!;
+  const { companyId } = await requireAdminPermission(PERMISSIONS.BRANCH_MANAGE);
 
   const branches = await prisma.branch.findMany({
     where: { companyId },

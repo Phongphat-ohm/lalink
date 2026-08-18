@@ -44,6 +44,7 @@ export default async function LiffLeavePage() {
     code: t.code,
     defaultDays: Number(t.defaultDays),
     allowHalfDay: t.allowHalfDay,
+    allowHourly: t.allowHourly,
     requireReason: t.requireReason,
     requireAttachment: t.requireAttachment,
     attachmentRequiredDays: t.attachmentRequiredDays

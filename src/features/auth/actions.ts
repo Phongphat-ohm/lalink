@@ -10,12 +10,8 @@ import {
 } from "@/lib/security/rate-limiter";
 import { createSession, destroySession } from "@/lib/auth/session";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  errors?: Record<string, string[]>;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 /**
  * Server action to authenticate Admin/HR/Manager users.
@@ -100,6 +96,15 @@ export async function loginAdminAction(
       return {
         success: false,
         message: "บริษัทต้นสังกัดถูกระงับการใช้งาน กรุณาติดต่อฝ่ายบริการ",
+      };
+    }
+
+    // 6. Employees use LINE LIFF, not the web admin.
+    if (user.role.code === "EMPLOYEE") {
+      return {
+        success: false,
+        message:
+          "พนักงานใช้งานระบบผ่าน LINE LIFF กรุณาเปิดแอป LINE แล้วเข้าใช้งานจากลิงก์ LIFF ของบริษัท",
       };
     }
 

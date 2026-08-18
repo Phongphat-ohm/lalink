@@ -10,11 +10,9 @@ import {
 } from "@/lib/storage";
 import crypto from "crypto";
 
-export interface StorageActionResult<T = any> {
-  success: boolean;
-  message?: string;
-  data?: T;
-}
+import type { ActionResult } from "@/lib/types";
+/** @deprecated Use ActionResult instead */
+export type StorageActionResult<T = unknown> = ActionResult<T>;
 
 /**
  * Upload an attachment for a Leave Request

@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/database";
+import { requireAdminPermission } from "@/lib/permissions/admin-access";
+import { PERMISSIONS } from "@/lib/permissions/rbac";
 import { DepartmentView } from "@/components/admin/department-view";
 import { revalidatePath } from "next/cache";
 
@@ -53,12 +54,9 @@ async function addPositionServerAction(name: string, code: string) {
 }
 
 export default async function AdminDepartmentsPage() {
-  const session = await getSession();
-  if (!session || session.type !== "USER") {
-    redirect("/admin/login");
-  }
-
-  const companyId = session.companyId!;
+  const { companyId } = await requireAdminPermission(
+    PERMISSIONS.ORGANIZATION_MANAGE,
+  );
 
   const [departments, positions] = await Promise.all([
     prisma.department.findMany({

@@ -1,4 +1,5 @@
-import { requireTenantContext } from "@/lib/tenant";
+import { requireAdminPermission } from "@/lib/permissions/admin-access";
+import { PERMISSIONS } from "@/lib/permissions/rbac";
 import { getLeaveSummaryReportAction } from "@/features/report";
 import { ReportView } from "@/components/admin/report-view";
 import { BarChart3 } from "lucide-react";
@@ -6,7 +7,7 @@ import { BarChart3 } from "lucide-react";
 export const dynamic = "force-dynamic";
 
 export default async function AdminReportsPage() {
-  const tenant = await requireTenantContext();
+  await requireAdminPermission(PERMISSIONS.REPORT_READ);
   const currentYear = new Date().getFullYear();
 
   const reportResult = await getLeaveSummaryReportAction(currentYear);

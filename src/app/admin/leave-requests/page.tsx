@@ -1,17 +1,14 @@
-import { getSession } from "@/lib/auth";
-import { redirect } from "next/navigation";
 import { prisma } from "@/lib/database";
+import { requireAdminPermission } from "@/lib/permissions/admin-access";
+import { PERMISSIONS } from "@/lib/permissions/rbac";
 import { LeaveRequestsTable } from "@/components/admin/leave-requests-table";
 import { Badge } from "@/components/ui/badge";
 
 export default async function AdminLeaveRequestsPage() {
-  const session = await getSession();
-  if (!session || session.type !== "USER") {
-    redirect("/admin/login");
-  }
+  const { companyId } = await requireAdminPermission(PERMISSIONS.LEAVE_APPROVE);
 
   const leaveRequests = await prisma.leaveRequest.findMany({
-    where: { companyId: session.companyId! },
+    where: { companyId },
     orderBy: { createdAt: "desc" },
     include: {
       employee: {

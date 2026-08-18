@@ -6,12 +6,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AuditLogger } from "@/lib/audit";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  errors?: Record<string, string[]>;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 const announcementSchema = z.object({
   title: z.string().min(1, "กรุณากรอกหัวข้อประกาศ").max(200).trim(),

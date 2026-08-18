@@ -6,12 +6,8 @@ import { requireTenantContext } from "@/lib/tenant";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions/rbac";
 import { ActorType } from "@prisma/client";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  errors?: Record<string, string[]>;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 const leaveTypePolicySchema = z.object({
   id: z.string().optional(),

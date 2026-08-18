@@ -5,4 +5,4 @@ export {
   unlinkLineEmployeeAction,
   anonymizeEmployeeAction,
 } from "./admin-actions";
-export type { ActionResult } from "./actions";
+export type { ActionResult } from "@/lib/types";

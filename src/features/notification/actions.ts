@@ -3,11 +3,8 @@
 import { prisma } from "@/lib/database";
 import { requireTenantContext } from "@/lib/tenant";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 export async function getNotificationsAction(limit = 20): Promise<
   ActionResult<

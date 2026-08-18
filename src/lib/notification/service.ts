@@ -1,14 +1,31 @@
 import { prisma } from "@/lib/database";
 import {
-  sendLinePushMessage,
   buildLeaveSubmittedFlex,
   buildLeaveApprovedFlex,
   buildLeaveRejectedFlex,
   buildLeaveCancelledFlex,
-  LeaveFlexData,
+  type LeaveFlexData,
 } from "@/lib/line";
+import { NotificationDispatcher } from "./dispatcher";
+import { NotificationChannel } from "@prisma/client";
 
+/**
+ * NotificationService — legacy facade.
+ *
+ * Kept for backward compatibility. All delivery logic is delegated to
+ * the `NotificationDispatcher` which routes to individual providers
+ * (LINE / In-App / Email).
+ */
 export class NotificationService {
+  private static dispatcher: NotificationDispatcher | null = null;
+
+  private static getDispatcher(): NotificationDispatcher {
+    if (!this.dispatcher) {
+      this.dispatcher = NotificationDispatcher.createDefault();
+    }
+    return this.dispatcher;
+  }
+
   /**
    * 1. Trigger when Employee submits a Leave Request
    */
@@ -38,27 +55,17 @@ export class NotificationService {
 
       const flexMessage = buildLeaveSubmittedFlex(flexData);
 
-      // Save In-App Notification for Employee
-      await prisma.notification.create({
-        data: {
-          companyId: leaveRequest.companyId,
-          recipientType: "EMPLOYEE",
-          recipientId: leaveRequest.employeeId,
-          channel: "LINE",
-          title: "ยื่นใบลาสำเร็จ",
-          message: `ใบลาเลขที่ ${leaveRequest.requestNumber} (${leaveRequest.leaveType.name}) อยู่ระหว่างรออนุมัติ`,
-          status: "SENT",
-          payload: flexMessage as any,
-          sentAt: new Date(),
-        },
+      // Save In-App Notification for Employee via LINE channel
+      await this.getDispatcher().dispatch({
+        companyId: leaveRequest.companyId,
+        recipientType: "EMPLOYEE",
+        recipientId: leaveRequest.employeeId,
+        channel: NotificationChannel.LINE,
+        title: "ยื่นใบลาสำเร็จ",
+        message: `ใบลาเลขที่ ${leaveRequest.requestNumber} (${leaveRequest.leaveType.name}) อยู่ระหว่างรออนุมัติ`,
+        payload: flexMessage,
+        lineUserId: leaveRequest.employee.lineUserId,
       });
-
-      // Send LINE Push Message to Employee if linked
-      if (leaveRequest.employee.lineUserId) {
-        await sendLinePushMessage(leaveRequest.employee.lineUserId, [
-          flexMessage,
-        ]);
-      }
 
       // Notify Company Admins / HR In-app
       const adminUsers = await prisma.user.findMany({
@@ -70,18 +77,14 @@ export class NotificationService {
       });
 
       for (const admin of adminUsers) {
-        await prisma.notification.create({
-          data: {
-            companyId: leaveRequest.companyId,
-            recipientType: "USER",
-            recipientId: admin.id,
-            channel: "IN_APP",
-            title: "มีคำขอลางานใหม่",
-            message: `${flexData.employeeName} ยื่นขอ ${flexData.leaveTypeName} (${flexData.totalDays} วัน)`,
-            status: "SENT",
-            payload: { leaveRequestId: leaveRequest.id },
-            sentAt: new Date(),
-          },
+        await this.getDispatcher().dispatch({
+          companyId: leaveRequest.companyId,
+          recipientType: "USER",
+          recipientId: admin.id,
+          channel: NotificationChannel.IN_APP,
+          title: "มีคำขอลางานใหม่",
+          message: `${flexData.employeeName} ยื่นขอ ${flexData.leaveTypeName} (${flexData.totalDays} วัน)`,
+          payload: { leaveRequestId: leaveRequest.id },
         });
       }
     } catch (err) {
@@ -117,27 +120,16 @@ export class NotificationService {
 
       const flexMessage = buildLeaveApprovedFlex(flexData);
 
-      // Save In-App Notification
-      await prisma.notification.create({
-        data: {
-          companyId: leaveRequest.companyId,
-          recipientType: "EMPLOYEE",
-          recipientId: leaveRequest.employeeId,
-          channel: "LINE",
-          title: "ใบลาได้รับการอนุมัติ",
-          message: `คำขอลา ${leaveRequest.leaveType.name} วันที่ ${flexData.startDate} ได้รับการอนุมัติแล้ว`,
-          status: "SENT",
-          payload: flexMessage as any,
-          sentAt: new Date(),
-        },
+      await this.getDispatcher().dispatch({
+        companyId: leaveRequest.companyId,
+        recipientType: "EMPLOYEE",
+        recipientId: leaveRequest.employeeId,
+        channel: NotificationChannel.LINE,
+        title: "ใบลาได้รับการอนุมัติ",
+        message: `คำขอลา ${leaveRequest.leaveType.name} วันที่ ${flexData.startDate} ได้รับการอนุมัติแล้ว`,
+        payload: flexMessage,
+        lineUserId: leaveRequest.employee.lineUserId,
       });
-
-      // Send LINE Push Message
-      if (leaveRequest.employee.lineUserId) {
-        await sendLinePushMessage(leaveRequest.employee.lineUserId, [
-          flexMessage,
-        ]);
-      }
     } catch (err) {
       console.warn("notifyLeaveApproved error (non-blocking):", err);
     }
@@ -174,27 +166,16 @@ export class NotificationService {
 
       const flexMessage = buildLeaveRejectedFlex(flexData, reason);
 
-      // Save In-App Notification
-      await prisma.notification.create({
-        data: {
-          companyId: leaveRequest.companyId,
-          recipientType: "EMPLOYEE",
-          recipientId: leaveRequest.employeeId,
-          channel: "LINE",
-          title: "ใบลาไม่ได้รับการอนุมัติ",
-          message: `คำขอลา ${leaveRequest.leaveType.name} ไม่ได้รับการอนุมัติ (เหตุผล: ${reason})`,
-          status: "SENT",
-          payload: flexMessage as any,
-          sentAt: new Date(),
-        },
+      await this.getDispatcher().dispatch({
+        companyId: leaveRequest.companyId,
+        recipientType: "EMPLOYEE",
+        recipientId: leaveRequest.employeeId,
+        channel: NotificationChannel.LINE,
+        title: "ใบลาไม่ได้รับการอนุมัติ",
+        message: `คำขอลา ${leaveRequest.leaveType.name} ไม่ได้รับการอนุมัติ (เหตุผล: ${reason})`,
+        payload: flexMessage,
+        lineUserId: leaveRequest.employee.lineUserId,
       });
-
-      // Send LINE Push Message
-      if (leaveRequest.employee.lineUserId) {
-        await sendLinePushMessage(leaveRequest.employee.lineUserId, [
-          flexMessage,
-        ]);
-      }
     } catch (err) {
       console.warn("notifyLeaveRejected error (non-blocking):", err);
     }
@@ -228,27 +209,16 @@ export class NotificationService {
 
       const flexMessage = buildLeaveCancelledFlex(flexData);
 
-      // Save In-App Notification
-      await prisma.notification.create({
-        data: {
-          companyId: leaveRequest.companyId,
-          recipientType: "EMPLOYEE",
-          recipientId: leaveRequest.employeeId,
-          channel: "LINE",
-          title: "ยกเลิกคำขอลาแล้ว",
-          message: `คำขอลาเลขที่ ${leaveRequest.requestNumber} ได้รับการยกเลิกเรียบร้อยแล้ว`,
-          status: "SENT",
-          payload: flexMessage as any,
-          sentAt: new Date(),
-        },
+      await this.getDispatcher().dispatch({
+        companyId: leaveRequest.companyId,
+        recipientType: "EMPLOYEE",
+        recipientId: leaveRequest.employeeId,
+        channel: NotificationChannel.LINE,
+        title: "ยกเลิกคำขอลาแล้ว",
+        message: `คำขอลาเลขที่ ${leaveRequest.requestNumber} ได้รับการยกเลิกเรียบร้อยแล้ว`,
+        payload: flexMessage,
+        lineUserId: leaveRequest.employee.lineUserId,
       });
-
-      // Send LINE Push Message
-      if (leaveRequest.employee.lineUserId) {
-        await sendLinePushMessage(leaveRequest.employee.lineUserId, [
-          flexMessage,
-        ]);
-      }
     } catch (err) {
       console.warn("notifyLeaveCancelled error (non-blocking):", err);
     }

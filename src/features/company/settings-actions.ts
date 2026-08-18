@@ -5,12 +5,8 @@ import { getSession } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  errors?: Record<string, string[]>;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 const companySettingsSchema = z.object({
   name: z.string().min(2, "ชื่อบริษัทต้องมีความยาวอย่างน้อย 2 ตัวอักษร").trim(),

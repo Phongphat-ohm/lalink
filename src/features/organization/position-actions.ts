@@ -6,12 +6,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { AuditLogger } from "@/lib/audit";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  errors?: Record<string, string[]>;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 const positionSchema = z.object({
   code: z.string().optional().or(z.literal("")),

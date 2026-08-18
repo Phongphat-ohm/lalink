@@ -24,6 +24,7 @@ export interface SerializedLeaveTypeOption {
   code: string;
   defaultDays: number;
   allowHalfDay: boolean;
+  allowHourly: boolean;
   requireReason: boolean;
   requireAttachment: boolean;
   attachmentRequiredDays: number | null;
@@ -49,6 +50,7 @@ export function LeaveForm({ leaveTypes }: LeaveFormProps) {
   );
   const [startPeriod, setStartPeriod] = React.useState<string>("FULL_DAY");
   const [endPeriod, setEndPeriod] = React.useState<string>("FULL_DAY");
+  const [hours, setHours] = React.useState<string>("1");
   const [reason, setReason] = React.useState<string>("");
 
   const [isLoading, setIsLoading] = React.useState(false);
@@ -60,12 +62,21 @@ export function LeaveForm({ leaveTypes }: LeaveFormProps) {
 
   const selectedType = leaveTypes.find((lt) => lt.id === selectedLeaveTypeId);
 
+  const isHourlySelected =
+    startPeriod === "HOURLY" || endPeriod === "HOURLY";
+
   // Estimate total days
   const estimatedDays = React.useMemo(() => {
     if (!startDate || !endDate) return 0;
     const start = new Date(startDate);
     const end = new Date(endDate);
     if (end < start) return 0;
+
+    // Hourly leave = hours / 8 (default working hours per day)
+    if (isHourlySelected) {
+      const h = Number(hours);
+      return Number((Math.max(0, h) / 8).toFixed(2));
+    }
 
     let count = 0;
     const cur = new Date(start);
@@ -86,7 +97,7 @@ export function LeaveForm({ leaveTypes }: LeaveFormProps) {
     }
 
     return Math.max(0, count);
-  }, [startDate, endDate, startPeriod, endPeriod]);
+  }, [startDate, endDate, startPeriod, endPeriod, hours, isHourlySelected]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -247,42 +258,105 @@ export function LeaveForm({ leaveTypes }: LeaveFormProps) {
                 )}
               </div>
 
-              {/* 4. ช่วงเวลา (เต็มวัน / ครึ่งวัน) */}
-              {selectedType?.allowHalfDay && (
-                <div className="grid grid-cols-2 gap-3 min-w-0">
-                  <div className="min-w-0 space-y-1">
-                    <label className="text-xs font-semibold text-[#0d253d]">
-                      ช่วงเวลาวันเริ่ม
-                    </label>
-                    <Select
-                      name="startPeriod"
-                      value={startPeriod}
-                      onChange={(e) => setStartPeriod(e.target.value)}
-                      disabled={isLoading}
-                      className="box-border h-10 w-full min-w-0 max-w-full text-xs rounded-xl"
-                    >
-                      <option value="FULL_DAY">เต็มวัน</option>
-                      <option value="HALF_DAY_AM">ครึ่งวันเช้า</option>
-                      <option value="HALF_DAY_PM">ครึ่งวันบ่าย</option>
-                    </Select>
+              {/* 4. ช่วงเวลา (เต็มวัน / ครึ่งวัน / รายชั่วโมง) */}
+              {(selectedType?.allowHalfDay || selectedType?.allowHourly) && (
+                <div className="min-w-0 space-y-3">
+                  <div className="grid grid-cols-2 gap-3 min-w-0">
+                    <div className="min-w-0 space-y-1">
+                      <label className="text-xs font-semibold text-[#0d253d]">
+                        ช่วงเวลาวันเริ่ม
+                      </label>
+                      <Select
+                        name="startPeriod"
+                        value={startPeriod}
+                        onChange={(e) => {
+                          setStartPeriod(e.target.value);
+                          if (
+                            (e.target.value === "HOURLY" ||
+                              endPeriod === "HOURLY") &&
+                            startDate !== endDate
+                          ) {
+                            setEndDate(startDate);
+                          }
+                        }}
+                        disabled={isLoading}
+                        className="box-border h-10 w-full min-w-0 max-w-full text-xs rounded-xl"
+                      >
+                        <option value="FULL_DAY">เต็มวัน</option>
+                        {selectedType?.allowHalfDay && (
+                          <>
+                            <option value="HALF_DAY_AM">ครึ่งวันเช้า</option>
+                            <option value="HALF_DAY_PM">ครึ่งวันบ่าย</option>
+                          </>
+                        )}
+                        {selectedType?.allowHourly && (
+                          <option value="HOURLY">รายชั่วโมง</option>
+                        )}
+                      </Select>
+                    </div>
+
+                    <div className="min-w-0 space-y-1">
+                      <label className="text-xs font-semibold text-[#0d253d]">
+                        ช่วงเวลาวันสิ้นสุด
+                      </label>
+                      <Select
+                        name="endPeriod"
+                        value={endPeriod}
+                        onChange={(e) => {
+                          setEndPeriod(e.target.value);
+                          if (
+                            (e.target.value === "HOURLY" ||
+                              startPeriod === "HOURLY") &&
+                            startDate !== endDate
+                          ) {
+                            setEndDate(startDate);
+                          }
+                        }}
+                        disabled={isLoading}
+                        className="box-border h-10 w-full min-w-0 max-w-full text-xs rounded-xl"
+                      >
+                        <option value="FULL_DAY">เต็มวัน</option>
+                        {selectedType?.allowHalfDay && (
+                          <>
+                            <option value="HALF_DAY_AM">ครึ่งวันเช้า</option>
+                            <option value="HALF_DAY_PM">ครึ่งวันบ่าย</option>
+                          </>
+                        )}
+                        {selectedType?.allowHourly && (
+                          <option value="HOURLY">รายชั่วโมง</option>
+                        )}
+                      </Select>
+                    </div>
                   </div>
 
-                  <div className="min-w-0 space-y-1">
-                    <label className="text-xs font-semibold text-[#0d253d]">
-                      ช่วงเวลาวันสิ้นสุด
-                    </label>
-                    <Select
-                      name="endPeriod"
-                      value={endPeriod}
-                      onChange={(e) => setEndPeriod(e.target.value)}
-                      disabled={isLoading}
-                      className="box-border h-10 w-full min-w-0 max-w-full text-xs rounded-xl"
-                    >
-                      <option value="FULL_DAY">เต็มวัน</option>
-                      <option value="HALF_DAY_AM">ครึ่งวันเช้า</option>
-                      <option value="HALF_DAY_PM">ครึ่งวันบ่าย</option>
-                    </Select>
-                  </div>
+                  {isHourlySelected && (
+                    <div className="min-w-0 space-y-1">
+                      <label
+                        htmlFor="hours"
+                        className="text-xs font-semibold text-[#0d253d]"
+                      >
+                        จำนวนชั่วโมงที่ขอลา{" "}
+                        <span className="text-[#ea2261]">*</span>
+                      </label>
+                      <Input
+                        id="hours"
+                        name="hours"
+                        type="number"
+                        min="0.5"
+                        max="24"
+                        step="0.5"
+                        value={hours}
+                        onChange={(e) => setHours(e.target.value)}
+                        disabled={isLoading}
+                        className="box-border h-10 w-full min-w-0 max-w-full text-xs rounded-xl"
+                      />
+                      {fieldErrors.hours && (
+                        <p className="text-[11px] text-[#ea2261] font-medium">
+                          {fieldErrors.hours[0]}
+                        </p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

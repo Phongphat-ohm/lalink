@@ -5,11 +5,8 @@ import { getSession } from "@/lib/auth/session";
 import { revalidatePath } from "next/cache";
 import { AuditLogger } from "@/lib/audit";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 export async function unlinkEmployeeLineAction(
   employeeId: string,

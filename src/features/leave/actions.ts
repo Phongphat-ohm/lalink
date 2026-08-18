@@ -11,15 +11,14 @@ import {
   scopedAudit,
 } from "@/lib/tenant";
 import { calculateLeaveDays } from "@/lib/leave/calculator";
+import { resolveEffectiveWorkSchedule } from "@/lib/leave/work-schedule";
+import { resolveLeaveYear } from "@/lib/leave/leave-year";
+import { initializeApprovals } from "@/lib/leave/approval-engine";
 import { NotificationService } from "@/lib/notification";
 import { LeavePeriod, LeaveRequestStatus, ActorType } from "@prisma/client";
 
-export interface ActionResult<T = unknown> {
-  success: boolean;
-  message?: string;
-  data?: T;
-  errors?: Record<string, string[]>;
-}
+import type { ActionResult } from "@/lib/types";
+export type { ActionResult };
 
 /**
  * Creates a new Leave Request on behalf of the authenticated employee.
@@ -45,6 +44,7 @@ export async function createLeaveRequestAction(
         (formData.get("startPeriod") as LeavePeriod) || LeavePeriod.FULL_DAY,
       endPeriod:
         (formData.get("endPeriod") as LeavePeriod) || LeavePeriod.FULL_DAY,
+      hours: formData.get("hours"),
       reason: (formData.get("reason") as string) || "",
     };
 
@@ -58,11 +58,19 @@ export async function createLeaveRequestAction(
       };
     }
 
-    const { leaveTypeId, startDate, endDate, startPeriod, endPeriod, reason } =
-      validated.data;
+    const {
+      leaveTypeId,
+      startDate,
+      endDate,
+      startPeriod,
+      endPeriod,
+      hours,
+      reason,
+    } = validated.data;
     const startObj = new Date(startDate);
     const endObj = new Date(endDate);
-    const requestYear = startObj.getFullYear();
+    const leaveYear = await resolveLeaveYear(tenant.companyId, startObj);
+    const requestYear = leaveYear.year;
 
     // 2. Fetch & Validate Leave Type Policy
     const leaveType = await scopedLeaveType.findById(
@@ -94,17 +102,29 @@ export async function createLeaveRequestAction(
       };
     }
 
-    // 3. Fetch Company Holidays for Calculation
-    const holidays = await scopedHoliday.listByYear(
-      tenant.companyId,
-      requestYear,
-    );
+    const isHourly =
+      startPeriod === LeavePeriod.HOURLY || endPeriod === LeavePeriod.HOURLY;
+    if (isHourly && !leaveType.allowHourly) {
+      return {
+        success: false,
+        message: `ประเภทการลา "${leaveType.name}" ไม่อนุญาตให้ลารายชั่วโมง`,
+      };
+    }
+
+    // 3. Fetch Company Holidays + Effective Work Schedule for Calculation
+    const [holidays, workSchedule] = await Promise.all([
+      scopedHoliday.listByYear(tenant.companyId, requestYear),
+      resolveEffectiveWorkSchedule(tenant.companyId, tenant.employeeId!),
+    ]);
     const calculation = calculateLeaveDays({
       startDate: startObj,
       endDate: endObj,
       startPeriod,
       endPeriod,
+      hours: isHourly ? Number(hours) : undefined,
       holidays: holidays.map((h) => ({ date: h.date, name: h.name })),
+      workSchedule:
+        workSchedule.entries.length > 0 ? workSchedule.entries : undefined,
     });
 
     if (calculation.totalDays <= 0) {
@@ -181,12 +201,20 @@ export async function createLeaveRequestAction(
           startPeriod,
           endPeriod,
           totalDays: totalLeaveDays,
+          hours: isHourly ? Number(hours) : null,
           reason,
           status: LeaveRequestStatus.PENDING,
         },
       });
 
       createdRequestId = createdRequest.id;
+
+      // Initialize multi-level approval steps (if workflow configured)
+      await initializeApprovals(tx, {
+        companyId: tenant.companyId,
+        leaveTypeId,
+        leaveRequestId: createdRequest.id,
+      });
 
       // Update Leave Balance (Move from remaining to pending)
       if (balance) {
@@ -212,6 +240,7 @@ export async function createLeaveRequestAction(
             requestNumber,
             leaveTypeId,
             totalDays: totalLeaveDays,
+            hours: isHourly ? Number(hours) : null,
             startDate: startObj.toISOString(),
             endDate: endObj.toISOString(),
           },
@@ -284,7 +313,11 @@ export async function cancelLeaveRequestAction(
     }
 
     const leaveDays = Number(request.totalDays);
-    const requestYear = request.startDate.getFullYear();
+    const leaveYear = await resolveLeaveYear(
+      tenant.companyId,
+      request.startDate,
+    );
+    const requestYear = leaveYear.year;
 
     // 2. Atomic Transaction: Cancel & Restore Pending Balance
     await prisma.$transaction(async (tx) => {
