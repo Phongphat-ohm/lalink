@@ -49,9 +49,7 @@ services:
       - "${APP_PORT:-3000}:3000"
     environment:
       # --- Database ---
-      # ใช้ db service ใน compose เป็นค่า default; เปลี่ยนเป็นภายนอกได้โดย
-      # ใส่ DATABASE_URL เต็มใน .env
-      DATABASE_URL: postgresql://${POSTGRES_USER:-lalink}:${POSTGRES_PASSWORD:-lalink_secret_change_me}@db:5432/${POSTGRES_DB:-lalink_saas}?schema=public
+      DATABASE_URL: ${DATABASE_URL:-postgresql://${POSTGRES_USER:-lalink}:${POSTGRES_PASSWORD:-lalink_secret_change_me}@db:5432/${POSTGRES_DB:-lalink_saas}?schema=public}
 
       # --- App & Auth ---
       NODE_ENV: production
