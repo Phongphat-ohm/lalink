@@ -15,6 +15,7 @@ export default async function AdminLeaveRequestsPage() {
         include: { department: true, position: true },
       },
       leaveType: true,
+      leaveApprovals: { orderBy: { stepOrder: "asc" } },
     },
   });
 
@@ -31,6 +32,15 @@ export default async function AdminLeaveRequestsPage() {
     rejectionReason: req.rejectionReason,
     approvedBy: req.approvedBy,
     createdAt: req.createdAt.toISOString(),
+    approvals: req.leaveApprovals.map((a) => ({
+      id: a.id,
+      stepOrder: a.stepOrder,
+      roleCode: a.roleCode,
+      status: a.status,
+      comment: a.comment,
+      approverId: a.approverId,
+      actedAt: a.actedAt ? a.actedAt.toISOString() : null,
+    })),
     employee: {
       id: req.employee.id,
       employeeCode: req.employee.employeeCode,

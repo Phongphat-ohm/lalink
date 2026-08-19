@@ -87,6 +87,83 @@ export async function createAnnouncementAction(
   }
 }
 
+export async function updateAnnouncementAction(
+  id: string,
+  prevState: unknown,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    const session = await getSession();
+    if (!session || !session.companyId) {
+      return { success: false, message: "Unauthorized" };
+    }
+
+    const existing = await prisma.announcement.findFirst({
+      where: { id, companyId: session.companyId },
+    });
+    if (!existing) {
+      return { success: false, message: "ไม่พบประกาศที่ต้องการแก้ไข" };
+    }
+
+    const rawData = {
+      title: formData.get("title"),
+      content: formData.get("content"),
+      targetGroup: formData.get("targetGroup") || "ALL",
+      branchId: formData.get("branchId") || undefined,
+      departmentId: formData.get("departmentId") || undefined,
+    };
+
+    const validated = announcementSchema.safeParse(rawData);
+    if (!validated.success) {
+      return {
+        success: false,
+        message: "ข้อมูลไม่ถูกต้อง",
+        errors: validated.error.flatten().fieldErrors,
+      };
+    }
+
+    const { title, content, targetGroup, branchId, departmentId } =
+      validated.data;
+
+    const announcement = await prisma.announcement.update({
+      where: { id },
+      data: {
+        title,
+        content,
+        targetGroup,
+        branchId: targetGroup === "BRANCH" && branchId ? branchId : null,
+        departmentId:
+          targetGroup === "DEPARTMENT" && departmentId ? departmentId : null,
+      },
+    });
+
+    await AuditLogger.log({
+      companyId: session.companyId,
+      actorType: "USER",
+      actorId: session.userId,
+      action: "UPDATE_ANNOUNCEMENT",
+      resource: "Announcement",
+      resourceId: announcement.id,
+      details: {
+        title: announcement.title,
+        targetGroup: announcement.targetGroup,
+      },
+    });
+
+    revalidatePath("/admin/announcements");
+    revalidatePath("/liff/dashboard");
+
+    return {
+      success: true,
+      message: "แก้ไขประกาศเรียบร้อยแล้ว",
+      data: announcement,
+    };
+  } catch (error) {
+    console.error("Update Announcement Error:", error);
+    return { success: false, message: "เกิดข้อผิดพลาดในการแก้ไขประกาศ" };
+  }
+}
+
 export async function deleteAnnouncementAction(
   id: string,
 ): Promise<ActionResult> {

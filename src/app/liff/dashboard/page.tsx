@@ -1,6 +1,10 @@
 import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/database";
+import {
+  buildEmployeeAnnouncementWhere,
+  buildEmployeeAnnouncementOrderBy,
+} from "@/lib/announcement/target";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -11,7 +15,7 @@ import {
   SerializedCalendarLeave,
   SerializedCalendarHoliday,
 } from "@/components/liff";
-import { PlusCircle, ChevronRight } from "lucide-react";
+import { PlusCircle, ChevronRight, BellRing } from "lucide-react";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +75,17 @@ export default async function LiffDashboardPage() {
     redirect("/liff/connect");
   }
 
+  const announcements = await prisma.announcement.findMany({
+    where: buildEmployeeAnnouncementWhere({
+      companyId: session.companyId!,
+      branchId: employee.branchId,
+      departmentId: employee.departmentId,
+    }),
+    orderBy: buildEmployeeAnnouncementOrderBy(),
+    take: 3,
+    select: { id: true, title: true, isPinned: true, publishedAt: true },
+  });
+
   const serializedCalendarLeaves: SerializedCalendarLeave[] =
     calendarLeaves.map((l) => ({
       id: l.id,
@@ -94,7 +109,7 @@ export default async function LiffDashboardPage() {
   }));
 
   return (
-    <div className="min-h-screen bg-[#f6f9fc] p-4 pb-24 max-w-md mx-auto space-y-5">
+    <div className="min-h-screen bg-[#f6f9fc] p-4 pb-24 space-y-5">
       {/* 1. Employee Greeting Header with Live LINE Profile Avatar */}
       <LiffGreetingHeader
         employee={{
@@ -105,6 +120,57 @@ export default async function LiffDashboardPage() {
           company: employee.company,
         }}
       />
+
+      {/* 1.5. Announcements Preview */}
+      {announcements.length > 0 && (
+        <div>
+          <div className="flex items-center justify-between mb-2.5">
+            <h2 className="text-xs font-semibold text-[#64748d] uppercase tracking-wider">
+              ประกาศล่าสุด
+            </h2>
+            <Link
+              href="/liff/announcements"
+              className="text-xs font-semibold text-[#533afd] hover:underline flex items-center"
+            >
+              ดูทั้งหมด <ChevronRight className="h-3.5 w-3.5 ml-0.5" />
+            </Link>
+          </div>
+
+          <div className="space-y-2">
+            {announcements.map((a) => (
+              <Link key={a.id} href="/liff/announcements" className="block">
+                <div
+                  className={`rounded-2xl border bg-white p-3.5 shadow-[0_1px_3px_rgba(0,55,112,0.06)] flex items-center justify-between ${
+                    a.isPinned ? "border-[#533afd]/40" : "border-[#e3e8ee]"
+                  }`}
+                >
+                  <div className="flex items-start space-x-2.5 min-w-0">
+                    <span
+                      className={`flex h-8 w-8 items-center justify-center rounded-xl shrink-0 ${
+                        a.isPinned
+                          ? "bg-[#533afd]/10 text-[#533afd]"
+                          : "bg-[#f6f9fc] text-[#64748d]"
+                      }`}
+                    >
+                      <BellRing className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-xs font-bold text-[#0d253d] truncate">
+                        {a.isPinned ? "📌 " : ""}
+                        {a.title}
+                      </p>
+                      <p className="text-[10px] text-[#64748d] mt-0.5">
+                        {new Date(a.publishedAt).toLocaleDateString("th-TH")}
+                      </p>
+                    </div>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-[#94a3b8] shrink-0" />
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 2. Main Leave Balances Summary */}
       <div>

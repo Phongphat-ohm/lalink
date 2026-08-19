@@ -266,6 +266,89 @@ export async function changePasswordAction(
 }
 
 /**
+ * Server action for an authenticated User to update their own profile
+ * (name + email). Email uniqueness is enforced to prevent duplicates.
+ */
+export async function updateProfileAction(
+  prevState: unknown,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    const { getSession } = await import("@/lib/auth/session");
+    const session = await getSession();
+
+    if (!session || !session.userId) {
+      return {
+        success: false,
+        message: "กรุณาเข้าสู่ระบบก่อนแก้ไขข้อมูลส่วนตัว",
+      };
+    }
+
+    const { updateProfileSchema } = await import("./schemas");
+    const rawData = {
+      name: formData.get("name"),
+      email: formData.get("email"),
+    };
+
+    const validated = updateProfileSchema.safeParse(rawData);
+    if (!validated.success) {
+      return {
+        success: false,
+        message: "ข้อมูลที่กรอกไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง",
+        errors: validated.error.flatten().fieldErrors,
+      };
+    }
+
+    const { name, email } = validated.data;
+
+    // Duplicate email check (excluding self)
+    const existingUser = await prisma.user.findUnique({
+      where: { email },
+      select: { id: true },
+    });
+    if (existingUser && existingUser.id !== session.userId) {
+      return {
+        success: false,
+        message: "อีเมลนี้ถูกใช้โดยผู้ใช้งานอื่นแล้ว",
+        errors: { email: ["อีเมลนี้ถูกใช้โดยผู้ใช้งานอื่นแล้ว"] },
+      };
+    }
+
+    const updated = await prisma.user.update({
+      where: { id: session.userId },
+      data: { name, email },
+      select: { id: true, email: true },
+    });
+
+    try {
+      const { AuditLogger } = await import("@/lib/audit");
+      await AuditLogger.log({
+        companyId: session.companyId,
+        actorType: "USER",
+        actorId: session.userId,
+        action: "UPDATE_PROFILE",
+        resource: "User",
+        resourceId: updated.id,
+        details: { email: updated.email },
+      });
+    } catch {
+      // Audit log error shouldn't block profile update
+    }
+
+    return {
+      success: true,
+      message: "บันทึกข้อมูลส่วนตัวเรียบร้อยแล้ว",
+    };
+  } catch (error) {
+    console.error("Update Profile Error:", error);
+    return {
+      success: false,
+      message: "เกิดข้อผิดพลาดในการบันทึกข้อมูลส่วนตัว",
+    };
+  }
+}
+
+/**
  * Server action for Admin/System Admin to reset any user's password.
  */
 export async function adminResetPasswordAction(

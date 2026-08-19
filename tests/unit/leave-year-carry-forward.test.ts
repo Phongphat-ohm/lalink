@@ -373,6 +373,80 @@ describe("Phase 3: Leave Year + Balance + Carry Forward", () => {
       expect(Number(expiration.days)).toBe(5);
     });
 
+    it("should treat a null cap as unlimited carry-forward", async () => {
+      const uncapped = {
+        ...sourceBalance,
+        remainingDays: "15.00",
+        leaveType: {
+          allowCarryForward: true,
+          maxCarryForwardDays: null,
+        },
+      };
+      mockFindMany.mockResolvedValue([uncapped]);
+      mockFindUnique.mockResolvedValueOnce(null);
+      mockCreate
+        .mockResolvedValueOnce({
+          id: "tb-null",
+          companyId: "c1",
+          employeeId: "e1",
+          leaveTypeId: "lt1",
+          year: 2026,
+          allocatedDays: "10.00",
+          usedDays: "0.00",
+          pendingDays: "0.00",
+          remainingDays: "10.00",
+          carriedForwardDays: "0.00",
+        })
+        .mockResolvedValueOnce({ id: "tx-n1" });
+      mockUpdate.mockResolvedValue({});
+
+      const summary = await runCarryForwardForCompany({
+        companyId: "c1",
+        sourceYear: 2025,
+        targetYear: 2026,
+      });
+
+      expect(summary.daysCarriedForward).toBe(15);
+      expect(summary.daysExpired).toBe(0);
+    });
+
+    it("should treat a zero cap as unlimited carry-forward", async () => {
+      const zeroCapped = {
+        ...sourceBalance,
+        remainingDays: "15.00",
+        leaveType: {
+          allowCarryForward: true,
+          maxCarryForwardDays: "0.00",
+        },
+      };
+      mockFindMany.mockResolvedValue([zeroCapped]);
+      mockFindUnique.mockResolvedValueOnce(null);
+      mockCreate
+        .mockResolvedValueOnce({
+          id: "tb-zero",
+          companyId: "c1",
+          employeeId: "e1",
+          leaveTypeId: "lt1",
+          year: 2026,
+          allocatedDays: "10.00",
+          usedDays: "0.00",
+          pendingDays: "0.00",
+          remainingDays: "10.00",
+          carriedForwardDays: "0.00",
+        })
+        .mockResolvedValueOnce({ id: "tx-z1" });
+      mockUpdate.mockResolvedValue({});
+
+      const summary = await runCarryForwardForCompany({
+        companyId: "c1",
+        sourceYear: 2025,
+        targetYear: 2026,
+      });
+
+      expect(summary.daysCarriedForward).toBe(15);
+      expect(summary.daysExpired).toBe(0);
+    });
+
     it("should not carry forward when the leave type disallows it", async () => {
       const noCarry = {
         ...sourceBalance,

@@ -31,6 +31,11 @@ import {
   XCircle,
   Loader2,
   Eye,
+  GitBranch,
+  CheckCircle2,
+  Circle,
+  UserCheck,
+  Timer,
 } from "lucide-react";
 
 export interface SerializedEmployeeLeaveRequest {
@@ -50,6 +55,15 @@ export interface SerializedEmployeeLeaveRequest {
     code: string;
     isPaid: boolean;
   };
+  approvals: {
+    id: string;
+    stepOrder: number;
+    roleCode: string | null;
+    status: string;
+    comment: string | null;
+    actedAt: string | null;
+    approverName: string | null;
+  }[];
 }
 
 interface LeaveHistoryListProps {
@@ -98,6 +112,34 @@ export function LeaveHistoryList({ initialRequests }: LeaveHistoryListProps) {
         return "ครึ่งวันบ่าย";
       default:
         return "เต็มวัน";
+    }
+  };
+
+  const stepStatusLabel = (status: string) => {
+    switch (status) {
+      case "APPROVED":
+        return "อนุมัติแล้ว";
+      case "REJECTED":
+        return "ไม่อนุมัติ";
+      case "SKIPPED":
+        return "ข้ามขั้นตอน";
+      default:
+        return "รอดำเนินการ";
+    }
+  };
+
+  const roleCodeLabel = (roleCode: string | null) => {
+    switch (roleCode) {
+      case "MANAGER":
+        return "หัวหน้างาน";
+      case "HR_ADMIN":
+        return "HR Admin";
+      case "HR":
+        return "ฝ่ายบุคคล";
+      case "COMPANY_ADMIN":
+        return "ผู้ดูแลบริษัท";
+      default:
+        return "ผู้อนุมัติ";
     }
   };
 
@@ -308,6 +350,83 @@ export function LeaveHistoryList({ initialRequests }: LeaveHistoryListProps) {
                   {selectedRequest.reason || "ไม่ระบุเหตุผล"}
                 </p>
               </div>
+
+              {/* Approval Chain */}
+              {selectedRequest.approvals.length > 0 && (
+                <div className="rounded-xl border border-[#e3e8ee] p-3 space-y-2 bg-white">
+                  <div className="flex items-center space-x-1.5 font-semibold text-[#0d253d]">
+                    <GitBranch className="h-4 w-4 text-[#533afd]" />
+                    <span>สายการอนุมัติ</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {selectedRequest.approvals.map((step, idx) => {
+                      const isApproved = step.status === "APPROVED";
+                      const isRejected = step.status === "REJECTED";
+                      const isSkipped = step.status === "SKIPPED";
+                      const isPending = step.status === "PENDING";
+
+                      return (
+                        <div key={step.id} className="flex items-start space-x-2.5">
+                          <div className="flex flex-col items-center self-stretch">
+                            {isApproved ? (
+                              <CheckCircle2 className="h-5 w-5 text-[#059669] shrink-0" />
+                            ) : isRejected ? (
+                              <XCircle className="h-5 w-5 text-[#ea2261] shrink-0" />
+                            ) : isSkipped ? (
+                              <Circle className="h-5 w-5 text-[#94a3b8] shrink-0" />
+                            ) : (
+                              <Timer className="h-5 w-5 text-[#d97706] shrink-0" />
+                            )}
+                            {idx < selectedRequest.approvals.length - 1 && (
+                              <span className="w-px flex-1 min-h-3 bg-[#e3e8ee] my-0.5" />
+                            )}
+                          </div>
+                          <div className="flex-1 min-w-0 pb-1">
+                            <div className="flex items-center justify-between gap-2">
+                              <p
+                                className={`text-xs font-semibold ${
+                                  isRejected ? "text-[#ea2261]" : "text-[#0d253d]"
+                                }`}
+                              >
+                                ขั้นตอนที่ {step.stepOrder}:{" "}
+                                {roleCodeLabel(step.roleCode)}
+                              </p>
+                              <Badge
+                                variant={
+                                  isApproved
+                                    ? "success"
+                                    : isRejected
+                                      ? "destructive"
+                                      : isSkipped
+                                        ? "outline"
+                                        : "warning"
+                                }
+                                className="text-[9px] rounded-full px-2 py-0.5"
+                              >
+                                {stepStatusLabel(step.status)}
+                              </Badge>
+                            </div>
+                            <p className="text-[10px] text-[#64748d] mt-0.5">
+                              {isPending
+                                ? "รอผู้อนุมัติตามสิทธิ์ดำเนินการ"
+                                : `${step.approverName || "ระบบ"} ${
+                                    step.actedAt
+                                      ? `เมื่อ ${new Date(step.actedAt).toLocaleString("th-TH")}`
+                                      : ""
+                                  }`}
+                            </p>
+                            {step.comment && (
+                              <p className="text-[10px] text-[#475569] bg-[#f6f9fc] rounded-lg px-2 py-1 mt-1">
+                                {step.comment}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Rejection Note if Rejected */}
               {selectedRequest.status === "REJECTED" &&

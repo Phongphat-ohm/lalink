@@ -19,8 +19,8 @@ export default async function AdminAnnouncementsPage() {
     prisma.announcement.findMany({
       where: { companyId },
       include: {
-        branch: { select: { name: true } },
-        department: { select: { name: true } },
+        branch: { select: { id: true, name: true } },
+        department: { select: { id: true, name: true } },
       },
       orderBy: { publishedAt: "desc" },
     }),
@@ -42,6 +42,8 @@ export default async function AdminAnnouncementsPage() {
       title: a.title,
       content: a.content,
       targetGroup: a.targetGroup,
+      branchId: a.branchId,
+      departmentId: a.departmentId,
       branchName: a.branch?.name || null,
       departmentName: a.department?.name || null,
       isPublished: a.isPublished,

@@ -43,6 +43,7 @@ export interface SerializedBalanceEmployee {
     usedDays: number;
     pendingDays: number;
     remainingDays: number;
+    carriedForwardDays: number;
   }[];
 }
 
@@ -236,6 +237,14 @@ export function LeaveBalanceView({
                                 <span className="text-[10px] text-[#64748d]">
                                   /{b.allocatedDays}
                                 </span>
+                                {b.carriedForwardDays > 0 && (
+                                  <span
+                                    className="ml-1 text-[10px] font-semibold text-[#059669]"
+                                    title={`สะสมจากปีก่อน ${b.carriedForwardDays} วัน`}
+                                  >
+                                    +{b.carriedForwardDays}
+                                  </span>
+                                )}
                               </span>
                             ))
                           )}

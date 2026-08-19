@@ -93,7 +93,7 @@ function LoginForm() {
               name="email"
               type="email"
               autoComplete="email"
-              placeholder="admin@demo.com"
+              placeholder="name@company.com"
               required
               disabled={isLoading}
               className="h-10 rounded-xl"
@@ -155,17 +155,6 @@ function LoginForm() {
           >
             สมัครสมาชิกองค์กรใหม่
           </Link>
-        </div>
-
-        <div className="mt-4 border-t border-[#e3e8ee] pt-4 text-center text-xs text-[#64748d]">
-          Demo Credentials:{" "}
-          <code className="bg-[#f6f9fc] border border-[#e3e8ee] px-1.5 py-0.5 rounded font-mono text-[11px] text-[#533afd]">
-            admin@demo.com
-          </code>{" "}
-          /{" "}
-          <code className="bg-[#f6f9fc] border border-[#e3e8ee] px-1.5 py-0.5 rounded font-mono text-[11px] text-[#533afd]">
-            Admin@123456
-          </code>
         </div>
       </CardContent>
     </Card>

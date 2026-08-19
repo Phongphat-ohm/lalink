@@ -13,11 +13,29 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { CalendarDays, Plus, Loader2 } from "lucide-react";
+import {
+  CalendarDays,
+  Plus,
+  Loader2,
+  Pencil,
+  Trash2,
+  AlertCircle,
+} from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 
 interface SerializedHoliday {
   id: string;
   date: string;
+  isoDate: string;
   name: string;
   weekday: string;
 }
@@ -28,16 +46,36 @@ interface HolidayViewProps {
   onAddHoliday: (
     formData: FormData,
   ) => Promise<{ success: boolean; message?: string }>;
+  onUpdateHoliday: (
+    formData: FormData,
+  ) => Promise<{ success: boolean; message?: string }>;
+  onDeleteHoliday: (
+    holidayId: string,
+  ) => Promise<{ success: boolean; message?: string }>;
 }
 
 export function HolidayView({
   holidays,
   year,
   onAddHoliday,
+  onUpdateHoliday,
+  onDeleteHoliday,
 }: HolidayViewProps) {
   const router = useRouter();
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+
+  // Edit Holiday State
+  const [editTarget, setEditTarget] = React.useState<SerializedHoliday | null>(
+    null,
+  );
+  const [isEditSaving, setIsEditSaving] = React.useState(false);
+  const [editError, setEditError] = React.useState<string | null>(null);
+
+  // Delete Holiday State
+  const [deleteTarget, setDeleteTarget] =
+    React.useState<SerializedHoliday | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -49,6 +87,37 @@ export function HolidayView({
     if (res.success) {
       setIsAddModalOpen(false);
       router.refresh();
+    }
+  }
+
+  async function handleUpdateSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editTarget) return;
+    setIsEditSaving(true);
+    setEditError(null);
+    const formData = new FormData(e.currentTarget);
+    const res = await onUpdateHoliday(formData);
+    setIsEditSaving(false);
+
+    if (res.success) {
+      setEditTarget(null);
+      router.refresh();
+    } else {
+      setEditError(res.message || "เกิดข้อผิดพลาดในการแก้ไขวันหยุด");
+    }
+  }
+
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    const res = await onDeleteHoliday(deleteTarget.id);
+    setIsDeleting(false);
+
+    if (res.success) {
+      setDeleteTarget(null);
+      router.refresh();
+    } else {
+      alert(res.message || "ไม่สามารถลบวันหยุดได้");
     }
   }
 
@@ -101,8 +170,9 @@ export function HolidayView({
                 <tr>
                   <th className="py-3.5 px-4 pl-5 font-semibold">วันที่</th>
                   <th className="py-3.5 px-4 font-semibold">วันในสัปดาห์</th>
-                  <th className="py-3.5 px-4 pr-5 font-semibold">
-                    ชื่อวันหยุด
+                  <th className="py-3.5 px-4 font-semibold">ชื่อวันหยุด</th>
+                  <th className="py-3.5 px-4 pr-5 font-semibold text-right">
+                    การจัดการ
                   </th>
                 </tr>
               </thead>
@@ -116,8 +186,30 @@ export function HolidayView({
                       {h.date}
                     </td>
                     <td className="py-3.5 px-4 text-[#64748d]">{h.weekday}</td>
-                    <td className="py-3.5 px-4 pr-5 font-semibold text-[#0d253d]">
+                    <td className="py-3.5 px-4 font-semibold text-[#0d253d]">
                       {h.name}
+                    </td>
+                    <td className="py-3.5 px-4 pr-5">
+                      <div className="flex items-center justify-end space-x-1.5">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditTarget(h)}
+                          className="h-7 px-2 text-xs text-[#533afd] hover:bg-[#533afd]/10 rounded-full"
+                          title="แก้ไขวันหยุด"
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDeleteTarget(h)}
+                          className="h-7 px-2 text-xs text-[#ea2261] hover:bg-[#ffe4e6] rounded-full"
+                          title="ลบวันหยุด"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -197,6 +289,122 @@ export function HolidayView({
           </form>
         </DialogContent>
       </Dialog>
+    {/* Modal: Edit Holiday Dialog */}
+      <Dialog
+        open={!!editTarget}
+        onOpenChange={(open) => !open && setEditTarget(null)}
+      >
+        <DialogContent
+          onClose={() => setEditTarget(null)}
+          className="max-w-md rounded-2xl p-6"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
+              <Pencil className="h-5 w-5 text-[#533afd] mr-2" />
+              แก้ไขวันหยุดบริษัท
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#64748d]">
+              แก้ไขวันที่และชื่อของวันหยุดพิเศษ
+            </DialogDescription>
+          </DialogHeader>
+
+          {editError && (
+            <div className="p-2.5 rounded-xl bg-[#ffe4e6] text-[#ea2261] text-xs flex items-center">
+              <AlertCircle className="h-4 w-4 mr-2 shrink-0" />
+              {editError}
+            </div>
+          )}
+
+          <form onSubmit={handleUpdateSubmit} className="space-y-4 mt-3">
+            <input type="hidden" name="id" value={editTarget?.id} />
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                วันที่หยุด <span className="text-[#ea2261]">*</span>
+              </label>
+              <div className="relative w-full min-w-0">
+                <input
+                  type="date"
+                  name="date"
+                  defaultValue={editTarget?.isoDate}
+                  required
+                  className="date-input-fixed block w-full rounded-xl border border-[#a8c3de]/60 bg-white px-3.5 py-2 text-xs text-[#0d253d] focus:border-[#533afd] focus:outline-none focus:ring-2 focus:ring-[#533afd]/20"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                ชื่อวันหยุด <span className="text-[#ea2261]">*</span>
+              </label>
+              <Input
+                name="name"
+                defaultValue={editTarget?.name}
+                placeholder="เช่น วันสงกรานต์, วันแรงงานแห่งชาติ"
+                required
+                className="h-10 rounded-xl"
+              />
+            </div>
+
+            <DialogFooter className="mt-6 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditTarget(null)}
+                className="rounded-full h-9 px-4 text-xs"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                disabled={isEditSaving}
+                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] h-9 px-5 text-xs font-semibold"
+              >
+                {isEditSaving ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    กำลังบันทึก...
+                  </>
+                ) : (
+                  "บันทึกการแก้ไข"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Confirmation Alert */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent className="max-w-md rounded-2xl p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold text-[#0d253d]">
+              ยืนยันการลบวันหยุด?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-[#64748d]">
+              คุณต้องการลบวันหยุด &ldquo;{deleteTarget?.name}&rdquo; (
+              {deleteTarget?.date}) ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel
+              disabled={isDeleting}
+              className="rounded-full text-xs h-9 px-4"
+            >
+              ยกเลิก
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="rounded-full bg-[#ea2261] text-white hover:bg-[#d91452] text-xs h-9 px-5 font-semibold"
+            >
+              {isDeleting ? "กำลังลบ..." : "ลบวันหยุด"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

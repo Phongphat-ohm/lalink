@@ -27,9 +27,11 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   createEmployeeAdminAction,
+  updateEmployeeAdminAction,
   unlinkLineEmployeeAction,
   anonymizeEmployeeAction,
 } from "@/features/employee";
+import { EmployeeImportModal } from "./employee-import-modal";
 import {
   UserPlus,
   Link2,
@@ -40,6 +42,9 @@ import {
   AlertCircle,
   Eye,
   Shield,
+  Clock,
+  Pencil,
+  Upload,
 } from "lucide-react";
 
 export interface SerializedEmployee {
@@ -54,18 +59,23 @@ export interface SerializedEmployee {
   lineUserId: string | null;
   department: { id: string; name: string } | null;
   position: { id: string; name: string } | null;
+  shift: { id: string; name: string } | null;
 }
 
 interface EmployeeTableProps {
   initialEmployees: SerializedEmployee[];
   departments: { id: string; name: string }[];
   positions: { id: string; name: string }[];
+  shifts: { id: string; name: string }[];
+  canImport?: boolean;
 }
 
 export function EmployeeTable({
   initialEmployees,
   departments,
   positions,
+  shifts,
+  canImport = false,
 }: EmployeeTableProps) {
   const router = useRouter();
   const [employees, setEmployees] = React.useState(initialEmployees);
@@ -79,9 +89,22 @@ export function EmployeeTable({
     text: string;
   } | null>(null);
 
+  // Bulk Import Modal State
+  const [isImportOpen, setIsImportOpen] = React.useState(false);
+
   // View / Manage Employee Modal State
   const [selectedEmployee, setSelectedEmployee] =
     React.useState<SerializedEmployee | null>(null);
+
+  // Edit Employee Modal State
+  const [editTarget, setEditTarget] = React.useState<SerializedEmployee | null>(
+    null,
+  );
+  const [isUpdating, setIsUpdating] = React.useState(false);
+  const [updateMessage, setUpdateMessage] = React.useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   // Unlink Dialog State
   const [unlinkTarget, setUnlinkTarget] =
@@ -130,6 +153,37 @@ export function EmployeeTable({
       setCreateMessage({
         type: "error",
         text: result.message || "เกิดข้อผิดพลาดในการเพิ่มพนักงาน",
+      });
+    }
+  }
+
+  async function handleUpdateEmployee(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editTarget) return;
+    setIsUpdating(true);
+    setUpdateMessage(null);
+
+    const form = event.currentTarget;
+    const formData = new FormData(form);
+    const result = await updateEmployeeAdminAction(null, formData);
+
+    setIsUpdating(false);
+
+    if (result.success) {
+      setUpdateMessage({
+        type: "success",
+        text: result.message || "แก้ไขข้อมูลพนักงานสำเร็จ",
+      });
+      setTimeout(() => {
+        setEditTarget(null);
+        setUpdateMessage(null);
+        setSelectedEmployee(null);
+      }, 1000);
+      router.refresh();
+    } else {
+      setUpdateMessage({
+        type: "error",
+        text: result.message || "เกิดข้อผิดพลาดในการแก้ไขข้อมูลพนักงาน",
       });
     }
   }
@@ -200,13 +254,25 @@ export function EmployeeTable({
           />
         </div>
 
-        <Button
-          onClick={() => setIsAddModalOpen(true)}
-          className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] shadow-xs px-5 font-semibold text-xs sm:text-sm h-10"
-        >
-          <UserPlus className="h-4 w-4 mr-2" />
-          เพิ่มพนักงานใหม่
-        </Button>
+        <div className="flex flex-col sm:flex-row gap-2">
+          {canImport && (
+            <Button
+              onClick={() => setIsImportOpen(true)}
+              variant="outline"
+              className="rounded-full border-[#a8c3de]/60 text-[#0d253d] hover:border-[#533afd] hover:text-[#533afd] px-5 font-semibold text-xs sm:text-sm h-10"
+            >
+              <Upload className="h-4 w-4 mr-2" />
+              นำเข้า CSV
+            </Button>
+          )}
+          <Button
+            onClick={() => setIsAddModalOpen(true)}
+            className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] shadow-xs px-5 font-semibold text-xs sm:text-sm h-10"
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            เพิ่มพนักงานใหม่
+          </Button>
+        </div>
       </div>
 
       {/* Main Employee Table Card */}
@@ -230,6 +296,7 @@ export function EmployeeTable({
                   <th className="p-3.5 pl-5">รหัสพนักงาน</th>
                   <th className="p-3.5">ชื่อ-นามสกุล</th>
                   <th className="p-3.5">แผนก / ตำแหน่ง</th>
+                  <th className="p-3.5">กะทำงาน</th>
                   <th className="p-3.5">สถานะ LINE</th>
                   <th className="p-3.5">สถานะพนักงาน</th>
                   <th className="p-3.5 text-right pr-5">การจัดการ</th>
@@ -239,7 +306,7 @@ export function EmployeeTable({
                 {filteredEmployees.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="p-10 text-center text-[#64748d] bg-white"
                     >
                       {searchTerm
@@ -274,6 +341,16 @@ export function EmployeeTable({
                           <div className="text-[11px] text-[#64748d]">
                             {emp.position?.name || "-"}
                           </div>
+                        </td>
+                        <td className="p-3.5">
+                          {emp.shift ? (
+                            <Badge className="bg-[#533afd]/10 text-[#533afd] border border-[#533afd]/20 rounded-full text-[10px] py-0.5">
+                              <Clock className="h-3 w-3 mr-1" />
+                              {emp.shift.name}
+                            </Badge>
+                          ) : (
+                            <span className="text-[#94a3b8]">-</span>
+                          )}
                         </td>
                         <td className="p-3.5">
                           {isLinked ? (
@@ -313,6 +390,15 @@ export function EmployeeTable({
                         </td>
                         <td className="p-3.5 text-right pr-5 whitespace-nowrap">
                           <div className="flex items-center justify-end space-x-1.5">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEditTarget(emp)}
+                              className="h-7.5 px-2.5 text-xs rounded-full border-[#e3e8ee] hover:border-[#533afd] hover:text-[#533afd]"
+                            >
+                              <Pencil className="h-3.5 w-3.5 mr-1" />
+                              แก้ไข
+                            </Button>
                             <Button
                               variant="outline"
                               size="sm"
@@ -465,6 +551,21 @@ export function EmployeeTable({
                 </Select>
               </div>
 
+              {/* Shift */}
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#0d253d]">
+                  กะทำงาน
+                </label>
+                <Select name="shiftId" className="h-10 rounded-xl">
+                  <option value="">-- ไม่กำหนดกะ --</option>
+                  {shifts.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
               {/* Email */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-[#0d253d]">
@@ -579,6 +680,12 @@ export function EmployeeTable({
                     {selectedEmployee.phone || "-"}
                   </p>
                 </div>
+                <div>
+                  <span className="text-[#64748d]">กะทำงาน:</span>
+                  <p className="font-semibold text-[#0d253d] mt-0.5">
+                    {selectedEmployee.shift?.name || "-"}
+                  </p>
+                </div>
               </div>
 
               {/* LINE Connection Info */}
@@ -634,7 +741,18 @@ export function EmployeeTable({
               </div>
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="flex flex-col sm:flex-row sm:justify-between gap-2">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setEditTarget(selectedEmployee);
+                  setSelectedEmployee(null);
+                }}
+                className="rounded-full w-full sm:w-auto h-9 text-xs border-[#533afd]/40 text-[#533afd] hover:bg-[#f6f9fc]"
+              >
+                <Pencil className="h-3.5 w-3.5 mr-1.5" />
+                แก้ไขข้อมูล
+              </Button>
               <Button
                 variant="outline"
                 onClick={() => setSelectedEmployee(null)}
@@ -643,6 +761,220 @@ export function EmployeeTable({
                 ปิดหน้าต่าง
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Modal 3: Edit Employee Dialog */}
+      {editTarget && (
+        <Dialog open={!!editTarget} onOpenChange={(open) => !open && setEditTarget(null)}>
+          <DialogContent
+            onClose={() => setEditTarget(null)}
+            className="max-w-xl rounded-2xl p-6 max-h-[90vh] overflow-y-auto"
+          >
+            <DialogHeader>
+              <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
+                <Pencil className="h-5 w-5 text-[#533afd] mr-2" />
+                แก้ไขข้อมูลพนักงาน
+              </DialogTitle>
+              <DialogDescription className="text-xs text-[#64748d]">
+                แก้ไขข้อมูลส่วนบุคคล สังกัด กะทำงาน และสถานะของ
+                {` ${editTarget.firstName} ${editTarget.lastName} (${editTarget.employeeCode})`}
+              </DialogDescription>
+            </DialogHeader>
+
+            {updateMessage && (
+              <div
+                className={`my-3 rounded-xl p-3 text-xs font-medium flex items-center ${
+                  updateMessage.type === "success"
+                    ? "bg-[#ecfdf5] text-[#059669] border border-[#a7f3d0]"
+                    : "bg-[#ffe4e6] text-[#ea2261] border border-[#fecdd3]"
+                }`}
+              >
+                {updateMessage.type === "success" ? (
+                  <CheckCircle2 className="h-4 w-4 mr-2 shrink-0" />
+                ) : (
+                  <AlertCircle className="h-4 w-4 mr-2 shrink-0" />
+                )}
+                <span>{updateMessage.text}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleUpdateEmployee} className="space-y-4 mt-3">
+              <input type="hidden" name="id" value={editTarget.id} />
+              <input type="hidden" name="employeeCode" value={editTarget.employeeCode} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[#0d253d]">
+                    รหัสพนักงาน
+                  </label>
+                  <Input
+                    value={editTarget.employeeCode}
+                    disabled
+                    className="h-10 uppercase rounded-xl bg-[#f6f9fc]"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[#0d253d]">
+                    สถานะพนักงาน <span className="text-[#ea2261]">*</span>
+                  </label>
+                  <Select
+                    name="status"
+                    defaultValue={editTarget.status}
+                    className="h-10 rounded-xl"
+                  >
+                    <option value="ACTIVE">ปฏิบัติงานปกติ (Active)</option>
+                    <option value="PROBATION">ทดลองงาน (Probation)</option>
+                    <option value="RESIGNED">พ้นสภาพ (Resigned)</option>
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[#0d253d]">
+                    วัน/เดือน/ปี เกิด <span className="text-[#ea2261]">*</span>
+                  </label>
+                  <div className="relative w-full min-w-0">
+                    <input
+                      type="date"
+                      name="dateOfBirth"
+                      required
+                      defaultValue={editTarget.dateOfBirth.slice(0, 10)}
+                      className="date-input-fixed block w-full rounded-xl border border-[#a8c3de]/60 bg-white px-3.5 py-2 text-xs text-[#0d253d] focus:border-[#533afd] focus:outline-none focus:ring-2 focus:ring-[#533afd]/20"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[#0d253d]">
+                    ชื่อจริง <span className="text-[#ea2261]">*</span>
+                  </label>
+                  <Input
+                    name="firstName"
+                    defaultValue={editTarget.firstName}
+                    required
+                    className="h-10 rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[#0d253d]">
+                    นามสกุล <span className="text-[#ea2261]">*</span>
+                  </label>
+                  <Input
+                    name="lastName"
+                    defaultValue={editTarget.lastName}
+                    required
+                    className="h-10 rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[#0d253d]">
+                    แผนก
+                  </label>
+                  <Select
+                    name="departmentId"
+                    defaultValue={editTarget.department?.id ?? ""}
+                    className="h-10 rounded-xl"
+                  >
+                    <option value="">-- ไม่ระบุแผนก --</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>
+                        {d.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[#0d253d]">
+                    ตำแหน่ง
+                  </label>
+                  <Select
+                    name="positionId"
+                    defaultValue={editTarget.position?.id ?? ""}
+                    className="h-10 rounded-xl"
+                  >
+                    <option value="">-- ไม่ระบุตำแหน่ง --</option>
+                    {positions.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[#0d253d]">
+                    กะทำงาน
+                  </label>
+                  <Select
+                    name="shiftId"
+                    defaultValue={editTarget.shift?.id ?? ""}
+                    className="h-10 rounded-xl"
+                  >
+                    <option value="">-- ไม่กำหนดกะ --</option>
+                    {shifts.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[#0d253d]">
+                    อีเมล
+                  </label>
+                  <Input
+                    type="email"
+                    name="email"
+                    defaultValue={editTarget.email ?? ""}
+                    className="h-10 rounded-xl"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-[#0d253d]">
+                    เบอร์โทรศัพท์
+                  </label>
+                  <Input
+                    name="phone"
+                    defaultValue={editTarget.phone ?? ""}
+                    className="h-10 rounded-xl"
+                  />
+                </div>
+              </div>
+
+              <DialogFooter className="mt-6 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setEditTarget(null);
+                    setUpdateMessage(null);
+                  }}
+                  className="rounded-full h-9 px-4 text-xs font-medium"
+                >
+                  ยกเลิก
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isUpdating}
+                  className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] h-9 px-5 text-xs font-semibold"
+                >
+                  {isUpdating ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      กำลังบันทึก...
+                    </>
+                  ) : (
+                    "บันทึกการแก้ไข"
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
       )}
@@ -736,6 +1068,12 @@ export function EmployeeTable({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Bulk Import CSV Modal */}
+      <EmployeeImportModal
+        open={isImportOpen}
+        onOpenChange={setIsImportOpen}
+      />
     </div>
   );
 }

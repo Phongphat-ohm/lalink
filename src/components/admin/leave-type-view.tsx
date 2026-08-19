@@ -14,7 +14,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Sparkles, Plus, Check, X, Loader2 } from "lucide-react";
+import { Sparkles, Plus, Check, X, Loader2, Pencil } from "lucide-react";
 
 interface SerializedLeaveType {
   id: string;
@@ -23,6 +23,9 @@ interface SerializedLeaveType {
   description: string | null;
   defaultDays: number;
   allowHalfDay: boolean;
+  allowHourly: boolean;
+  allowCarryForward: boolean;
+  maxCarryForwardDays: number | null;
   requireReason: boolean;
   isPaid: boolean;
   isActive: boolean;
@@ -42,6 +45,14 @@ export function LeaveTypeView({
   const router = useRouter();
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
+  const [editTarget, setEditTarget] = React.useState<SerializedLeaveType | null>(
+    null,
+  );
+
+  function openModal(target: SerializedLeaveType | null) {
+    setEditTarget(target);
+    setIsAddModalOpen(true);
+  }
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -52,6 +63,7 @@ export function LeaveTypeView({
 
     if (res.success) {
       setIsAddModalOpen(false);
+      setEditTarget(null);
       router.refresh();
     }
   }
@@ -71,7 +83,7 @@ export function LeaveTypeView({
         </div>
 
         <Button
-          onClick={() => setIsAddModalOpen(true)}
+          onClick={() => openModal(null)}
           className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] h-9 text-xs font-semibold px-4"
         >
           <Plus className="h-4 w-4 mr-1.5" />
@@ -89,7 +101,7 @@ export function LeaveTypeView({
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => setIsAddModalOpen(true)}
+            onClick={() => openModal(null)}
             className="h-7 text-xs text-[#533afd] hover:bg-[#533afd]/10 rounded-full px-2.5"
           >
             + สร้างใหม่
@@ -106,6 +118,12 @@ export function LeaveTypeView({
                   ลาครึ่งวัน
                 </th>
                 <th className="py-3.5 px-4 font-semibold text-center">
+                  ลารายชั่วโมง
+                </th>
+                <th className="py-3.5 px-4 font-semibold text-center">
+                  สะสมข้ามปี
+                </th>
+                <th className="py-3.5 px-4 font-semibold text-center">
                   ระบุเหตุผล
                 </th>
                 <th className="py-3.5 px-4 font-semibold text-center">
@@ -113,6 +131,9 @@ export function LeaveTypeView({
                 </th>
                 <th className="py-3.5 px-4 pr-5 font-semibold text-right">
                   สถานะ
+                </th>
+                <th className="py-3.5 px-4 pr-5 font-semibold text-right">
+                  การจัดการ
                 </th>
               </tr>
             </thead>
@@ -134,6 +155,28 @@ export function LeaveTypeView({
                   <td className="py-3.5 px-4 text-center">
                     {t.allowHalfDay ? (
                       <Check className="h-4 w-4 text-[#059669] mx-auto" />
+                    ) : (
+                      <X className="h-4 w-4 text-[#64748d]/40 mx-auto" />
+                    )}
+                  </td>
+                  <td className="py-3.5 px-4 text-center">
+                    {t.allowHourly ? (
+                      <Check className="h-4 w-4 text-[#059669] mx-auto" />
+                    ) : (
+                      <X className="h-4 w-4 text-[#64748d]/40 mx-auto" />
+                    )}
+                  </td>
+                  <td className="py-3.5 px-4 text-center">
+                    {t.allowCarryForward ? (
+                      <span className="inline-flex flex-col items-center">
+                        <Check className="h-4 w-4 text-[#059669]" />
+                        {t.maxCarryForwardDays !== null &&
+                          t.maxCarryForwardDays > 0 && (
+                            <span className="text-[10px] text-[#64748d] mt-0.5 font-mono">
+                              สูงสุด {t.maxCarryForwardDays} วัน
+                            </span>
+                          )}
+                      </span>
                     ) : (
                       <X className="h-4 w-4 text-[#64748d]/40 mx-auto" />
                     )}
@@ -170,6 +213,17 @@ export function LeaveTypeView({
                       {t.isActive ? "Active" : "Inactive"}
                     </Badge>
                   </td>
+                  <td className="py-3.5 px-4 pr-5 text-right">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => openModal(t)}
+                      className="h-7 px-2 text-xs text-[#533afd] hover:bg-[#533afd]/10 rounded-full"
+                      title="แก้ไขประเภทการลา"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -177,31 +231,39 @@ export function LeaveTypeView({
         </CardContent>
       </Card>
 
-      {/* Modal: Add Leave Type Dialog */}
+      {/* Modal: Add/Edit Leave Type Dialog */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent
-          onClose={() => setIsAddModalOpen(false)}
-          className="max-w-md rounded-2xl p-6"
+          onClose={() => {
+            setIsAddModalOpen(false);
+            setEditTarget(null);
+          }}
+          className="max-w-md rounded-2xl p-6 max-h-[90vh] overflow-y-auto"
         >
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
               <Sparkles className="h-5 w-5 text-[#533afd] mr-2" />
-              เพิ่มประเภทการลาใหม่
+              {editTarget ? "แก้ไขประเภทการลา" : "เพิ่มประเภทการลาใหม่"}
             </DialogTitle>
             <DialogDescription className="text-xs text-[#64748d]">
-              กำหนดนโยบายวันลา โควตาประจำปี และเงื่อนไขการใช้งานของพนักงาน
+              {editTarget
+                ? `แก้ไขนโยบายวันลา "${editTarget.name}"`
+                : "กำหนดนโยบายวันลา โควตาประจำปี และเงื่อนไขการใช้งานของพนักงาน"}
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleSave} className="space-y-4 mt-3">
+            {editTarget && <input type="hidden" name="id" value={editTarget.id} />}
             <div className="space-y-1">
               <label className="text-xs font-semibold text-[#0d253d]">
                 รหัสประเภทการลา <span className="text-[#ea2261]">*</span>
               </label>
               <Input
                 name="code"
+                defaultValue={editTarget?.code ?? ""}
                 placeholder="เช่น VACATION, SICK, BUSINESS"
                 required
+                disabled={!!editTarget}
                 className="h-10 uppercase rounded-xl font-mono"
               />
             </div>
@@ -212,6 +274,7 @@ export function LeaveTypeView({
               </label>
               <Input
                 name="name"
+                defaultValue={editTarget?.name ?? ""}
                 placeholder="เช่น ลาพักร้อนประจำปี"
                 required
                 className="h-10 rounded-xl"
@@ -226,7 +289,7 @@ export function LeaveTypeView({
                 name="defaultDays"
                 type="number"
                 step="0.5"
-                defaultValue="6"
+                defaultValue={editTarget?.defaultDays ?? 6}
                 required
                 className="h-10 rounded-xl tabular-nums font-mono"
               />
@@ -237,7 +300,7 @@ export function LeaveTypeView({
                 <input
                   type="checkbox"
                   name="allowHalfDay"
-                  defaultChecked
+                  defaultChecked={editTarget ? editTarget.allowHalfDay : true}
                   className="mr-2 h-4 w-4 rounded border-[#a8c3de] text-[#533afd] accent-[#533afd]"
                 />
                 อนุญาตให้ลาครึ่งวัน (Half Day)
@@ -246,8 +309,50 @@ export function LeaveTypeView({
               <label className="flex items-center text-xs text-[#0d253d] cursor-pointer">
                 <input
                   type="checkbox"
+                  name="allowHourly"
+                  defaultChecked={editTarget ? editTarget.allowHourly : false}
+                  className="mr-2 h-4 w-4 rounded border-[#a8c3de] text-[#533afd] accent-[#533afd]"
+                />
+                อนุญาตให้ลารายชั่วโมง (Hourly)
+              </label>
+
+              <div className="pt-1.5 border-t border-[#e3e8ee]">
+                <label className="flex items-center text-xs text-[#0d253d] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    name="allowCarryForward"
+                    defaultChecked={
+                      editTarget ? editTarget.allowCarryForward : false
+                    }
+                    className="mr-2 h-4 w-4 rounded border-[#a8c3de] text-[#533afd] accent-[#533afd]"
+                  />
+                  อนุญาตให้สะสมวันลาคงเหลือข้ามปี
+                </label>
+                <div className="mt-2 pl-6">
+                  <label className="text-[11px] text-[#64748d] font-medium">
+                    จำนวนวันสะสมสูงสุดต่อปี (เว้นว่าง = ไม่จำกัด)
+                  </label>
+                  <Input
+                    name="maxCarryForwardDays"
+                    type="number"
+                    step="0.5"
+                    min="0"
+                    placeholder="เช่น 10"
+                    defaultValue={
+                      editTarget?.maxCarryForwardDays
+                        ? String(editTarget.maxCarryForwardDays)
+                        : ""
+                    }
+                    className="h-8 mt-1 rounded-lg text-xs tabular-nums font-mono"
+                  />
+                </div>
+              </div>
+
+              <label className="flex items-center text-xs text-[#0d253d] cursor-pointer">
+                <input
+                  type="checkbox"
                   name="requireReason"
-                  defaultChecked
+                  defaultChecked={editTarget ? editTarget.requireReason : true}
                   className="mr-2 h-4 w-4 rounded border-[#a8c3de] text-[#533afd] accent-[#533afd]"
                 />
                 บังคับระบุเหตุผลการลา
@@ -258,7 +363,10 @@ export function LeaveTypeView({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={() => {
+                  setIsAddModalOpen(false);
+                  setEditTarget(null);
+                }}
                 className="rounded-full h-9 px-4 text-xs"
               >
                 ยกเลิก
@@ -274,7 +382,7 @@ export function LeaveTypeView({
                     กำลังบันทึก...
                   </>
                 ) : (
-                  "บันทึกประเภทการลา"
+                  editTarget ? "บันทึกการแก้ไข" : "บันทึกประเภทการลา"
                 )}
               </Button>
             </DialogFooter>

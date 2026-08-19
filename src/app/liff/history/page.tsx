@@ -22,6 +22,10 @@ export default async function LiffHistoryPage() {
     orderBy: { createdAt: "desc" },
     include: {
       leaveType: true,
+      leaveApprovals: {
+        orderBy: { stepOrder: "asc" },
+        include: { approver: { select: { name: true } } },
+      },
     },
   });
 
@@ -42,10 +46,19 @@ export default async function LiffHistoryPage() {
       code: req.leaveType.code,
       isPaid: req.leaveType.isPaid,
     },
+    approvals: req.leaveApprovals.map((a) => ({
+      id: a.id,
+      stepOrder: a.stepOrder,
+      roleCode: a.roleCode,
+      status: a.status,
+      comment: a.comment,
+      actedAt: a.actedAt?.toISOString() ?? null,
+      approverName: a.approver?.name ?? null,
+    })),
   }));
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 pb-24 max-w-md mx-auto">
+    <div className="min-h-screen bg-slate-50 p-4 pb-24">
       {/* Top Header */}
       <div className="flex items-center space-x-3 py-3 border-b border-slate-200">
         <Link href="/liff/dashboard">

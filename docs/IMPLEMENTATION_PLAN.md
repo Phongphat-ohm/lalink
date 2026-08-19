@@ -278,25 +278,28 @@
 
 ## Implementation Phases
 
-| Phase | Focus | Dependencies | Complexity |
-|---|---|---|---|
-| **PHASE 0** | Audit & Plan | None | ✅ Done |
-| **PHASE 1** | Database & Architecture Foundation | PHASE 0 | Medium |
-| **PHASE 2** | Leave Calculation Engine | PHASE 1 | Medium |
-| **PHASE 3** | Leave Year + Balance + Carry Forward | PHASE 1, 2 | High |
-| **PHASE 4** | Work Schedule + Shift | PHASE 1 | High |
-| **PHASE 5** | Approval Workflow (Multi-Level) | PHASE 1, 2 | High |
-| **PHASE 6** | Employee Lifecycle + Import | PHASE 1 | Medium |
-| **PHASE 7** | Notification Center + Announcement | PHASE 1 | Medium |
-| **PHASE 8** | MFA + Session Security | PHASE 1 | Medium |
-| **PHASE 9** | SaaS Plan + Subscription + Usage | PHASE 1 | High |
-| **PHASE 10** | Tenant Onboarding Wizard | PHASE 1, 9 | Medium |
-| **PHASE 11** | Analytics + Reporting | PHASE 1, 2, 3 | Medium |
-| **PHASE 12** | Backup + Restore | PHASE 1 | Medium |
-| **PHASE 13** | Security Center + API Keys + Webhook | PHASE 1 | Medium |
-| **PHASE 14** | Performance + Accessibility + UI Polish | All | Medium |
-| **PHASE 15** | Complete Testing | All | High |
-| **PHASE 16** | Production Hardening (Docker, CI/CD) | All | Medium |
+> **Status legend**: ✅ Done · 🔶 Partial · ❌ Not started
+> *Last updated: 2026-08-19*
+
+| Phase | Focus | Dependencies | Complexity | Status |
+|---|---|---|---|---|
+| **PHASE 0** | Audit & Plan | None | ✅ Done | ✅ |
+| **PHASE 1** | Database & Architecture Foundation | PHASE 0 | Medium | ✅ `phase1_foundation`, shared `ActionResult`, `middleware` |
+| **PHASE 2** | Leave Calculation Engine | PHASE 1 | Medium | ✅ `calculator.ts`, half-day/workday calc, 15 tests |
+| **PHASE 3** | Leave Year + Balance + Carry Forward | PHASE 1, 2 | High | ✅ `LeaveYear`, carry-forward job + ledger, 16 tests |
+| **PHASE 4** | Work Schedule + Shift | PHASE 1 | High | ✅ `Shift`/`WorkSchedule` models, 9 tests |
+| **PHASE 5** | Approval Workflow (Multi-Level) | PHASE 1, 2 | High | ✅ `approval-engine.ts` + runtime, 13 tests |
+| **PHASE 6** | Employee Lifecycle + Import | PHASE 1 | Medium | ✅ CSV import + `ImportLog`, session revocation, LINE unlinking, 17 tests |
+| **PHASE 7** | Notification Center + Announcement | PHASE 1 | Medium | 🔶 Provider pattern done (`Line/InApp/Email`); `isPinned`, `isRead`/`readAt` in schema. **Missing**: notification center UI, LIFF announcement view, `AnnouncementRead`, real email delivery (placeholder) |
+| **PHASE 8** | MFA + Session Security | PHASE 1 | Medium | 🔶 Session revocation on employee deactivation done. **Missing**: TOTP MFA, password-history enforcement (`PasswordHistory` model exists, unused), user self-service session list, login-history UI |
+| **PHASE 9** | SaaS Plan + Subscription + Usage | PHASE 1 | High | ❌ `Plan`/`Subscription` models exist but `features/subscription` is empty; no `EntitlementService`, no usage tracking |
+| **PHASE 10** | Tenant Onboarding Wizard | PHASE 1, 9 | Medium | ❌ No step-by-step onboarding flow |
+| **PHASE 11** | Analytics + Reporting | PHASE 1, 2, 3 | Medium | 🔶 Summary report (dept/type stats) + CSV export done. **Missing**: monthly trends, annual summaries, avg approval time |
+| **PHASE 12** | Backup + Restore | PHASE 1 | Medium | 🔶 UI + simulated logic only. **Missing**: real pg_dump, S3 backup, restore |
+| **PHASE 13** | Security Center + API Keys + Webhook | PHASE 1 | Medium | 🔶 Security center + API key CRUD done. **Missing**: webhook system (no `WebhookConfig`/`WebhookDelivery`) |
+| **PHASE 14** | Performance + Accessibility + UI Polish | All | Medium | 🔶 Middleware route guard + sidebar/UI polish done. **Missing**: centralized design tokens, ARIA/accessibility, responsive testing |
+| **PHASE 15** | Complete Testing | All | High | 🔶 21 files / 181 tests (was 16 files). **Missing**: integration, E2E (Playwright), load/concurrency, upload attack tests |
+| **PHASE 16** | Production Hardening (Docker, CI/CD) | All | Medium | ❌ No Dockerfile, docker-compose, `.dockerignore`, CI/CD, structured logging, real backup |
 
 ---
 

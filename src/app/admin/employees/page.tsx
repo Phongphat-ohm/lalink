@@ -1,25 +1,30 @@
 import { prisma } from "@/lib/database";
 import { requireAdminPermission } from "@/lib/permissions/admin-access";
-import { PERMISSIONS } from "@/lib/permissions/rbac";
+import { PERMISSIONS, hasPermission } from "@/lib/permissions/rbac";
 import { EmployeeTable } from "@/components/admin/employee-table";
 import { Badge } from "@/components/ui/badge";
 
 export default async function AdminEmployeesPage() {
-  const { companyId } = await requireAdminPermission(PERMISSIONS.EMPLOYEE_READ);
+  const access = await requireAdminPermission(PERMISSIONS.EMPLOYEE_READ);
 
-  const [employees, departments, positions] = await Promise.all([
+  const [employees, departments, positions, shifts] = await Promise.all([
     prisma.employee.findMany({
-      where: { companyId },
+      where: { companyId: access.companyId },
       orderBy: { employeeCode: "asc" },
-      include: { department: true, position: true },
+      include: { department: true, position: true, shift: true },
     }),
     prisma.department.findMany({
-      where: { companyId },
+      where: { companyId: access.companyId },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
     prisma.position.findMany({
-      where: { companyId },
+      where: { companyId: access.companyId },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+prisma.shift.findMany({
+      where: { companyId: access.companyId, isActive: true },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
@@ -40,6 +45,9 @@ export default async function AdminEmployeesPage() {
       : null,
     position: emp.position
       ? { id: emp.position.id, name: emp.position.name }
+      : null,
+    shift: emp.shift
+      ? { id: emp.shift.id, name: emp.shift.name }
       : null,
   }));
 
@@ -63,11 +71,14 @@ export default async function AdminEmployeesPage() {
         </Badge>
       </div>
 
-      <EmployeeTable
+<EmployeeTable
         initialEmployees={serializedEmployees}
         departments={departments}
         positions={positions}
+        shifts={shifts}
+        canImport={hasPermission(access.role, PERMISSIONS.EMPLOYEE_IMPORT)}
       />
     </div>
   );
 }
+

@@ -35,9 +35,11 @@ import {
   AlertCircle,
   Loader2,
   Building2,
+  Pencil,
 } from "lucide-react";
 import {
   createBranchAction,
+  updateBranchAction,
   deleteBranchAction,
 } from "@/features/organization/branch-actions";
 
@@ -72,6 +74,14 @@ export function BranchView({ branches }: BranchViewProps) {
   const [address, setAddress] = React.useState("");
   const [phone, setPhone] = React.useState("");
   const [isMain, setIsMain] = React.useState(false);
+
+  // Edit state
+  const [editTarget, setEditTarget] = React.useState<SerializedBranch | null>(
+    null,
+  );
+  const [isEditOpen, setIsEditOpen] = React.useState(false);
+  const [isEditLoading, setIsEditLoading] = React.useState(false);
+  const [editError, setEditError] = React.useState<string | null>(null);
 
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -113,6 +123,43 @@ export function BranchView({ branches }: BranchViewProps) {
       router.refresh();
     } else {
       alert(result.message || "ไม่สามารถลบสาขาได้");
+    }
+  }
+
+  function openEdit(branch: SerializedBranch) {
+    setEditTarget(branch);
+    setCode(branch.code);
+    setName(branch.name);
+    setAddress(branch.address || "");
+    setPhone(branch.phone || "");
+    setIsMain(branch.isMain);
+    setEditError(null);
+    setIsEditOpen(true);
+  }
+
+  async function handleEdit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!editTarget) return;
+    setIsEditLoading(true);
+    setEditError(null);
+
+    const formData = new FormData();
+    formData.append("id", editTarget.id);
+    formData.append("code", code);
+    formData.append("name", name);
+    formData.append("address", address);
+    formData.append("phone", phone);
+    formData.append("isMain", isMain ? "true" : "false");
+
+    const result = await updateBranchAction(null, formData);
+    setIsEditLoading(false);
+
+    if (result.success) {
+      setIsEditOpen(false);
+      setEditTarget(null);
+      router.refresh();
+    } else {
+      setEditError(result.message || "เกิดข้อผิดพลาดในการแก้ไขสาขา");
     }
   }
 
@@ -165,17 +212,28 @@ export function BranchView({ branches }: BranchViewProps) {
                   )}
                 </div>
 
-                {!b.isMain && (
+                <div className="flex items-center space-x-1">
+                  {!b.isMain && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setDeleteTarget(b)}
+                      className="h-7 w-7 text-[#ea2261] hover:bg-[#ffe4e6] rounded-full"
+                      title="ลบสาขา"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="icon"
-                    onClick={() => setDeleteTarget(b)}
-                    className="h-7 w-7 text-[#ea2261] hover:bg-[#ffe4e6] rounded-full"
-                    title="ลบสาขา"
+                    onClick={() => openEdit(b)}
+                    className="h-7 w-7 text-[#533afd] hover:bg-[#533afd]/10 rounded-full"
+                    title="แก้ไขสาขา"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Pencil className="h-3.5 w-3.5" />
                   </Button>
-                )}
+                </div>
               </CardHeader>
 
               <CardContent className="p-4 space-y-3">
@@ -327,6 +385,136 @@ export function BranchView({ branches }: BranchViewProps) {
                   </>
                 ) : (
                   "บันทึกสาขา"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Branch Modal */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent
+          onClose={() => {
+            setIsEditOpen(false);
+            setEditTarget(null);
+          }}
+          className="max-w-md rounded-2xl p-6"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
+              <Pencil className="h-5 w-5 text-[#533afd] mr-2" />
+              แก้ไขสาขา
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#64748d]">
+              แก้ไขข้อมูลสาขา
+              {editTarget ? ` "${editTarget.name}"` : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {editError && (
+            <div className="p-2.5 rounded-xl bg-[#ffe4e6] text-[#ea2261] text-xs">
+              {editError}
+            </div>
+          )}
+
+          <form onSubmit={handleEdit} className="space-y-3.5 mt-2">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                รหัสสาขา (Branch Code) <span className="text-[#ea2261]">*</span>
+              </label>
+              <Input
+                placeholder="เช่น HQ, BKK01, CNX02"
+                value={code}
+                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                required
+                disabled={isEditLoading}
+                className="h-9 rounded-xl text-xs font-mono font-bold"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                ชื่อสาขา <span className="text-[#ea2261]">*</span>
+              </label>
+              <Input
+                placeholder="เช่น สำนักงานใหญ่, สาขาเชียงใหม่"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                required
+                disabled={isEditLoading}
+                className="h-9 rounded-xl text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                เบอร์โทรศัพท์สาขา
+              </label>
+              <Input
+                placeholder="เช่น 02-123-4567"
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                disabled={isEditLoading}
+                className="h-9 rounded-xl text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                ที่อยู่สาขา
+              </label>
+              <textarea
+                rows={2}
+                placeholder="ที่อยู่ ถนน แขวง/ตำบล จังหวัด"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                disabled={isEditLoading}
+                className="w-full rounded-xl border border-[#a8c3de]/60 p-2.5 text-xs focus:border-[#533afd] focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center space-x-2 pt-1">
+              <input
+                type="checkbox"
+                id="isMainEdit"
+                checked={isMain}
+                onChange={(e) => setIsMain(e.target.checked)}
+                className="rounded border-[#e3e8ee] text-[#533afd] focus:ring-[#533afd]"
+              />
+              <label
+                htmlFor="isMainEdit"
+                className="text-xs font-medium text-[#0d253d] cursor-pointer"
+              >
+                ตั้งเป็นสำนักงานใหญ่ (Main Branch)
+              </label>
+            </div>
+
+            <DialogFooter className="mt-6 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsEditOpen(false);
+                  setEditTarget(null);
+                }}
+                disabled={isEditLoading}
+                className="rounded-full text-xs h-9 px-4"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                disabled={isEditLoading}
+                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] text-xs h-9 px-5 font-semibold"
+              >
+                {isEditLoading ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    กำลังบันทึก...
+                  </>
+                ) : (
+                  "บันทึกการแก้ไข"
                 )}
               </Button>
             </DialogFooter>

@@ -35,9 +35,11 @@ import {
   CheckCircle2,
   AlertCircle,
   Loader2,
+  Pencil,
 } from "lucide-react";
 import {
   createAnnouncementAction,
+  updateAnnouncementAction,
   deleteAnnouncementAction,
 } from "@/features/notification/announcement-actions";
 
@@ -46,6 +48,8 @@ export interface SerializedAnnouncement {
   title: string;
   content: string;
   targetGroup: string;
+  branchId: string | null;
+  departmentId: string | null;
   branchName: string | null;
   departmentName: string | null;
   isPublished: boolean;
@@ -75,6 +79,8 @@ export function AnnouncementView({
 }: AnnouncementViewProps) {
   const router = useRouter();
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
+  const [editTarget, setEditTarget] =
+    React.useState<SerializedAnnouncement | null>(null);
   const [deleteTarget, setDeleteTarget] =
     React.useState<SerializedAnnouncement | null>(null);
 
@@ -102,11 +108,14 @@ export function AnnouncementView({
     formData.append("branchId", branchId);
     formData.append("departmentId", departmentId);
 
-    const result = await createAnnouncementAction(null, formData);
+    const result = editTarget
+      ? await updateAnnouncementAction(editTarget.id, null, formData)
+      : await createAnnouncementAction(null, formData);
     setIsLoading(false);
 
     if (result.success) {
       setIsCreateOpen(false);
+      setEditTarget(null);
       setTitle("");
       setContent("");
       setTargetGroup("ALL");
@@ -114,7 +123,10 @@ export function AnnouncementView({
       setDepartmentId("");
       router.refresh();
     } else {
-      setError(result.message || "เกิดข้อผิดพลาดในการสร้างประกาศ");
+      setError(
+        result.message ||
+          (editTarget ? "เกิดข้อผิดพลาดในการแก้ไขประกาศ" : "เกิดข้อผิดพลาดในการสร้างประกาศ"),
+      );
     }
   }
 
@@ -149,6 +161,7 @@ export function AnnouncementView({
         <Button
           onClick={() => {
             setIsCreateOpen(true);
+            setEditTarget(null);
             setError(null);
           }}
           className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white px-5 h-9 text-xs font-semibold shadow-sm"
@@ -197,15 +210,37 @@ export function AnnouncementView({
                   </p>
                 </div>
 
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setDeleteTarget(a)}
-                  className="h-8 w-8 text-[#ea2261] hover:bg-[#ffe4e6] rounded-full"
-                  title="ลบประกาศ"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center space-x-1">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setEditTarget(a);
+                      setTitle(a.title);
+                      setContent(a.content);
+                      setTargetGroup(
+                        a.targetGroup as "ALL" | "BRANCH" | "DEPARTMENT",
+                      );
+                      setBranchId(a.branchId || "");
+                      setDepartmentId(a.departmentId || "");
+                      setIsCreateOpen(true);
+                      setError(null);
+                    }}
+                    className="h-8 w-8 text-[#533afd] hover:bg-[#ede9fe] rounded-full"
+                    title="แก้ไขประกาศ"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setDeleteTarget(a)}
+                    className="h-8 w-8 text-[#ea2261] hover:bg-[#ffe4e6] rounded-full"
+                    title="ลบประกาศ"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </div>
               </CardHeader>
 
               <CardContent className="p-4 pt-1">
@@ -219,18 +254,30 @@ export function AnnouncementView({
       </div>
 
       {/* Create Announcement Modal */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+      <Dialog
+        open={isCreateOpen}
+        onOpenChange={(open) => {
+          setIsCreateOpen(open);
+          if (!open) setEditTarget(null);
+        }}
+      >
         <DialogContent
           onClose={() => setIsCreateOpen(false)}
           className="max-w-md rounded-2xl p-6"
         >
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
-              <Megaphone className="h-5 w-5 text-[#533afd] mr-2" />
-              สร้างประกาศใหม่
+              {editTarget ? (
+                <Pencil className="h-5 w-5 text-[#533afd] mr-2" />
+              ) : (
+                <Megaphone className="h-5 w-5 text-[#533afd] mr-2" />
+              )}
+              {editTarget ? "แก้ไขประกาศ" : "สร้างประกาศใหม่"}
             </DialogTitle>
             <DialogDescription className="text-xs text-[#64748d]">
-              กรอกหัวข้อและเนื้อหาสำหรับแจ้งเตือนพนักงาน
+              {editTarget
+                ? `แก้ไขประกาศ "${editTarget.title}"`
+                : "กรอกหัวข้อและเนื้อหาสำหรับแจ้งเตือนพนักงาน"}
             </DialogDescription>
           </DialogHeader>
 
@@ -334,7 +381,10 @@ export function AnnouncementView({
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setIsCreateOpen(false)}
+                onClick={() => {
+                  setIsCreateOpen(false);
+                  setEditTarget(null);
+                }}
                 disabled={isLoading}
                 className="rounded-full text-xs h-9 px-4"
               >
@@ -345,14 +395,16 @@ export function AnnouncementView({
                 disabled={isLoading}
                 className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] text-xs h-9 px-5 font-semibold"
               >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    กำลังเผยแพร่...
-                  </>
-                ) : (
-                  "เผยแพร่ประกาศ"
-                )}
+{isLoading ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      {editTarget ? "กำลังบันทึก..." : "กำลังเผยแพร่..."}
+                    </>
+                  ) : editTarget ? (
+                    "บันทึกการแก้ไข"
+                  ) : (
+                    "เผยแพร่ประกาศ"
+                  )}
               </Button>
             </DialogFooter>
           </form>

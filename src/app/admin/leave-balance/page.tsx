@@ -49,6 +49,7 @@ export default async function AdminLeaveBalancePage() {
         usedDays: Number(b.usedDays),
         pendingDays: Number(b.pendingDays),
         remainingDays: Number(b.remainingDays),
+        carriedForwardDays: Number(b.carriedForwardDays),
       })),
     }),
   );

@@ -13,7 +13,7 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Building, Plus, Briefcase, Loader2, Users } from "lucide-react";
+import { Building, Plus, Briefcase, Loader2, Users, Pencil } from "lucide-react";
 
 interface DepartmentViewProps {
   departments: {
@@ -36,6 +36,16 @@ interface DepartmentViewProps {
     name: string,
     code: string,
   ) => Promise<{ success: boolean; message?: string }>;
+  onUpdateDepartment: (
+    id: string,
+    name: string,
+    code: string,
+  ) => Promise<{ success: boolean; message?: string }>;
+  onUpdatePosition: (
+    id: string,
+    name: string,
+    code: string,
+  ) => Promise<{ success: boolean; message?: string }>;
 }
 
 export function DepartmentView({
@@ -43,6 +53,8 @@ export function DepartmentView({
   positions,
   onAddDepartment,
   onAddPosition,
+  onUpdateDepartment,
+  onUpdatePosition,
 }: DepartmentViewProps) {
   const router = useRouter();
 
@@ -57,6 +69,26 @@ export function DepartmentView({
   const [posCode, setPosCode] = React.useState("");
   const [posName, setPosName] = React.useState("");
   const [isAddingPos, setIsAddingPos] = React.useState(false);
+
+  // Edit Department State
+  const [editDept, setEditDept] = React.useState<{
+    id: string;
+    code: string | null;
+    name: string;
+  } | null>(null);
+  const [editDeptCode, setEditDeptCode] = React.useState("");
+  const [editDeptName, setEditDeptName] = React.useState("");
+  const [isUpdatingDept, setIsUpdatingDept] = React.useState(false);
+
+  // Edit Position State
+  const [editPos, setEditPos] = React.useState<{
+    id: string;
+    code: string | null;
+    name: string;
+  } | null>(null);
+  const [editPosCode, setEditPosCode] = React.useState("");
+  const [editPosName, setEditPosName] = React.useState("");
+  const [isUpdatingPos, setIsUpdatingPos] = React.useState(false);
 
   async function handleCreateDept(e: React.FormEvent) {
     e.preventDefault();
@@ -82,6 +114,46 @@ export function DepartmentView({
       setPosCode("");
       setPosName("");
       setIsPosModalOpen(false);
+      router.refresh();
+    }
+  }
+
+  function openEditDept(d: {
+    id: string;
+    code: string | null;
+    name: string;
+  }) {
+    setEditDept(d);
+    setEditDeptCode(d.code || "");
+    setEditDeptName(d.name);
+  }
+
+  async function handleUpdateDept(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editDept || !editDeptName || !editDeptCode) return;
+    setIsUpdatingDept(true);
+    const res = await onUpdateDepartment(editDept.id, editDeptName, editDeptCode);
+    setIsUpdatingDept(false);
+    if (res.success) {
+      setEditDept(null);
+      router.refresh();
+    }
+  }
+
+  function openEditPos(p: { id: string; code: string | null; name: string }) {
+    setEditPos(p);
+    setEditPosCode(p.code || "");
+    setEditPosName(p.name);
+  }
+
+  async function handleUpdatePos(e: React.FormEvent) {
+    e.preventDefault();
+    if (!editPos || !editPosName || !editPosCode) return;
+    setIsUpdatingPos(true);
+    const res = await onUpdatePosition(editPos.id, editPosName, editPosCode);
+    setIsUpdatingPos(false);
+    if (res.success) {
+      setEditPos(null);
       router.refresh();
     }
   }
@@ -166,10 +238,21 @@ export function DepartmentView({
                         {d.name}
                       </td>
                       <td className="py-3 px-4 text-right text-[#64748d] tabular-nums font-mono">
-                        <span className="inline-flex items-center text-[11px] bg-[#f6f9fc] border border-[#e3e8ee] px-2 py-0.5 rounded-full">
-                          <Users className="h-3 w-3 mr-1 text-[#64748d]" />
-                          {d._count.employees} คน
-                        </span>
+                        <div className="flex items-center justify-end space-x-1.5">
+                          <span className="inline-flex items-center text-[11px] bg-[#f6f9fc] border border-[#e3e8ee] px-2 py-0.5 rounded-full">
+                            <Users className="h-3 w-3 mr-1 text-[#64748d]" />
+                            {d._count.employees} คน
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDept(d)}
+                            className="h-7 px-2 text-xs text-[#533afd] hover:bg-[#533afd]/10 rounded-full"
+                            title="แก้ไขแผนก"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -226,10 +309,21 @@ export function DepartmentView({
                         {p.name}
                       </td>
                       <td className="py-3 px-4 text-right text-[#64748d] tabular-nums font-mono">
-                        <span className="inline-flex items-center text-[11px] bg-[#f6f9fc] border border-[#e3e8ee] px-2 py-0.5 rounded-full">
-                          <Users className="h-3 w-3 mr-1 text-[#64748d]" />
-                          {p._count.employees} คน
-                        </span>
+                        <div className="flex items-center justify-end space-x-1.5">
+                          <span className="inline-flex items-center text-[11px] bg-[#f6f9fc] border border-[#e3e8ee] px-2 py-0.5 rounded-full">
+                            <Users className="h-3 w-3 mr-1 text-[#64748d]" />
+                            {p._count.employees} คน
+                          </span>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditPos(p)}
+                            className="h-7 px-2 text-xs text-[#533afd] hover:bg-[#533afd]/10 rounded-full"
+                            title="แก้ไขตำแหน่ง"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -375,6 +469,153 @@ export function DepartmentView({
                   </>
                 ) : (
                   "บันทึกตำแหน่ง"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    {/* Modal 3: Edit Department Dialog */}
+      <Dialog
+        open={!!editDept}
+        onOpenChange={(open) => !open && setEditDept(null)}
+      >
+        <DialogContent
+          onClose={() => setEditDept(null)}
+          className="max-w-md rounded-2xl p-6"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
+              <Pencil className="h-5 w-5 text-[#533afd] mr-2" />
+              แก้ไขแผนก (Department)
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#64748d]">
+              แก้ไขรหัสและชื่อของแผนกในโครงสร้างองค์กร
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleUpdateDept} className="space-y-4 mt-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                รหัสแผนก <span className="text-[#ea2261]">*</span>
+              </label>
+              <Input
+                value={editDeptCode}
+                onChange={(e) => setEditDeptCode(e.target.value.toUpperCase())}
+                placeholder="เช่น IT, HR, MKT, ACC"
+                required
+                className="h-10 uppercase rounded-xl"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                ชื่อแผนก <span className="text-[#ea2261]">*</span>
+              </label>
+              <Input
+                value={editDeptName}
+                onChange={(e) => setEditDeptName(e.target.value)}
+                placeholder="เช่น เทคโนโลยีสารสนเทศ"
+                required
+                className="h-10 rounded-xl"
+              />
+            </div>
+
+            <DialogFooter className="mt-6 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditDept(null)}
+                className="rounded-full h-9 px-4 text-xs"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                disabled={isUpdatingDept}
+                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] h-9 px-5 text-xs font-semibold"
+              >
+                {isUpdatingDept ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    กำลังบันทึก...
+                  </>
+                ) : (
+                  "บันทึกการแก้ไข"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal 4: Edit Position Dialog */}
+      <Dialog
+        open={!!editPos}
+        onOpenChange={(open) => !open && setEditPos(null)}
+      >
+        <DialogContent
+          onClose={() => setEditPos(null)}
+          className="max-w-md rounded-2xl p-6"
+        >
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
+              <Pencil className="h-5 w-5 text-[#533afd] mr-2" />
+              แก้ไขตำแหน่งงาน (Position)
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#64748d]">
+              แก้ไขรหัสและชื่อของตำแหน่งงานในโครงสร้างองค์กร
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleUpdatePos} className="space-y-4 mt-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                รหัสตำแหน่ง <span className="text-[#ea2261]">*</span>
+              </label>
+              <Input
+                value={editPosCode}
+                onChange={(e) => setEditPosCode(e.target.value.toUpperCase())}
+                placeholder="เช่น DEV, QA, MGR"
+                required
+                className="h-10 uppercase rounded-xl"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                ชื่อตำแหน่ง <span className="text-[#ea2261]">*</span>
+              </label>
+              <Input
+                value={editPosName}
+                onChange={(e) => setEditPosName(e.target.value)}
+                placeholder="เช่น Software Engineer"
+                required
+                className="h-10 rounded-xl"
+              />
+            </div>
+
+            <DialogFooter className="mt-6 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditPos(null)}
+                className="rounded-full h-9 px-4 text-xs"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                disabled={isUpdatingPos}
+                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] h-9 px-5 text-xs font-semibold"
+              >
+                {isUpdatingPos ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                    กำลังบันทึก...
+                  </>
+                ) : (
+                  "บันทึกการแก้ไข"
                 )}
               </Button>
             </DialogFooter>

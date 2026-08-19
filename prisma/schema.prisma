@@ -148,7 +148,9 @@ model Company {
   apiKeys              ApiKey[]
   fileAccessLogs       FileAccessLog[]
   workSchedules        WorkSchedule[]
+  shifts               Shift[]
   leaveYears           LeaveYear[]
+  importLogs           ImportLog[]
   subscription         Subscription?
 
   @@index([status])
@@ -373,6 +375,7 @@ model Employee {
   departmentId String?
   positionId   String?
   managerId    String?        // หัวหน้าสายตรง
+  shiftId      String?        // กะทำงานที่กำหนดให้พนักงานโดยตรง
   status       EmployeeStatus @default(ACTIVE)
   lineUserId   String?        @unique // LINE User ID ที่เชื่อมโยงแล้ว (Unique 1 ต่อ 1)
   avatarUrl    String?        // รูปโปรไฟล์ LINE
@@ -387,6 +390,7 @@ model Employee {
   branch            Branch?            @relation(fields: [branchId], references: [id], onDelete: SetNull)
   department        Department?        @relation(fields: [departmentId], references: [id], onDelete: SetNull)
   position          Position?          @relation(fields: [positionId], references: [id], onDelete: SetNull)
+  shift             Shift?             @relation(fields: [shiftId], references: [id], onDelete: SetNull)
   manager           Employee?          @relation("ManagerSubordinates", fields: [managerId], references: [id], onDelete: SetNull)
   subordinates      Employee[]         @relation("ManagerSubordinates")
   leaveBalances     LeaveBalance[]
@@ -398,6 +402,7 @@ model Employee {
   @@index([companyId])
   @@index([branchId])
   @@index([managerId])
+  @@index([shiftId])
   @@index([lineUserId])
   @@index([status])
   @@index([createdAt])
@@ -907,6 +912,7 @@ model WorkSchedule {
   branchId       String?           // เมื่อ scope = BRANCH
   departmentId   String?           // เมื่อ scope = DEPARTMENT
   employeeId     String?           // เมื่อ scope = EMPLOYEE
+  shiftId        String?           // กะทำงานอ้างอิง (ใช้เวลาทำงานจาก Shift แทน entries)
   isActive       Boolean           @default(true)
   createdAt      DateTime          @default(now())
   updatedAt      DateTime          @updatedAt
@@ -916,13 +922,51 @@ model WorkSchedule {
   branch       Branch?         @relation(fields: [branchId], references: [id], onDelete: Cascade)
   department   Department?     @relation(fields: [departmentId], references: [id], onDelete: Cascade)
   employee     Employee?       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  shift        Shift?          @relation(fields: [shiftId], references: [id], onDelete: SetNull)
   entries      WorkScheduleEntry[]
 
   @@index([companyId])
   @@index([branchId])
   @@index([departmentId])
   @@index([employeeId])
+  @@index([shiftId])
   @@map("work_schedules")
+}
+
+model Shift {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String   // เช่น "กะเช้า 08:00-16:00", "กะดึก 22:00-06:00"
+  description String?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  company   Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entries   ShiftEntry[]
+  employees Employee[]
+  schedules WorkSchedule[]
+
+  @@unique([companyId, name])
+  @@index([companyId])
+  @@map("shifts")
+}
+
+model ShiftEntry {
+  id           String   @id @default(cuid())
+  shiftId      String
+  dayOfWeek    Int      // 0=อาทิตย์ ... 6=เสาร์ (JS Date.getDay())
+  startTime    String   // เช่น "08:30"
+  endTime      String   // เช่น "17:30"
+  isWorkingDay Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  // Relations
+  shift Shift @relation(fields: [shiftId], references: [id], onDelete: Cascade)
+
+  @@unique([shiftId, dayOfWeek])
+  @@map("shift_entries")
 }
 
 model WorkScheduleEntry {
@@ -986,4 +1030,27 @@ model RateLimitEntry {
   updatedAt      DateTime  @updatedAt
 
   @@map("rate_limit_entries")
+}
+
+model ImportLog {
+  id           String   @id @default(cuid())
+  companyId    String
+  fileName     String
+  fileType     String   @default("CSV")
+  totalRows    Int      @default(0)
+  successCount Int      @default(0)
+  failedCount  Int      @default(0)
+  status       String   @default("COMPLETED") // COMPLETED, PARTIAL, FAILED
+  errors       Json?   // array of { row, message }
+  importedBy   String?  // user id
+  importedByName String?
+  createdAt    DateTime @default(now())
+
+  // Relations
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([createdAt])
+  @@index([status])
+  @@map("import_logs")
 }

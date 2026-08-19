@@ -26,10 +26,13 @@ import {
   Smartphone,
   Megaphone,
   QrCode,
+  Clock,
+  CalendarClock,
+  Workflow,
+  UserRound,
 } from "lucide-react";
 import { logoutAdminAction } from "@/features/auth";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions/rbac";
-import { ChangePasswordModal } from "@/components/admin/change-password-modal";
 import { CompanyQrModal } from "@/components/admin/company-qr-modal";
 
 interface AdminSidebarProps {
@@ -49,12 +52,11 @@ export function AdminSidebarLayout({
 }: AdminSidebarProps) {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = React.useState(false);
   const [isQrModalOpen, setIsQrModalOpen] = React.useState(false);
 
   const navigationGroups = [
     {
-      group: "ภาพรวม & งานประจำวัน",
+      group: "ภาพรวม",
       items: [
         {
           href: "/admin/dashboard",
@@ -67,11 +69,63 @@ export function AdminSidebarLayout({
           icon: CalendarDays,
           permission: PERMISSIONS.LEAVE_READ,
         },
+      ],
+    },
+    {
+      group: "ใบลา",
+      items: [
         {
           href: "/admin/leave-requests",
           label: "การอนุมัติใบลา",
           icon: FileCheck,
           permission: PERMISSIONS.LEAVE_APPROVE,
+        },
+        {
+          href: "/admin/leave-balance",
+          label: "โควตาและยอดวันลา",
+          icon: Scale,
+          permission: PERMISSIONS.POLICY_MANAGE,
+        },
+        {
+          href: "/admin/leave-types",
+          label: "นโยบายประเภทการลา",
+          icon: Sparkles,
+          permission: PERMISSIONS.POLICY_MANAGE,
+        },
+        {
+          href: "/admin/leave-years",
+          label: "ปีลางาน",
+          icon: CalendarRange,
+          permission: PERMISSIONS.POLICY_MANAGE,
+        },
+        {
+          href: "/admin/approval-workflows",
+          label: "สายการอนุมัติ",
+          icon: Workflow,
+          permission: PERMISSIONS.WORKFLOW_MANAGE,
+        },
+      ],
+    },
+    {
+      group: "เวลาทำงาน",
+      items: [
+        {
+          href: "/admin/shifts",
+          label: "กะทำงาน",
+          icon: Clock,
+          permission: PERMISSIONS.POLICY_MANAGE,
+        },
+        {
+          href: "/admin/work-schedules",
+          label: "ตารางเวลาทำงาน",
+          icon: CalendarClock,
+          permission: PERMISSIONS.POLICY_MANAGE,
+        },
+        {
+          href: "/admin/holidays",
+          label: "ปฏิทินวันหยุดบริษัท",
+          icon: CalendarDays,
+          permission: PERMISSIONS.HOLIDAY_MANAGE,
         },
       ],
     },
@@ -105,35 +159,6 @@ export function AdminSidebarLayout({
       ],
     },
     {
-      group: "การจัดการวันลา",
-      items: [
-        {
-          href: "/admin/leave-types",
-          label: "นโยบายประเภทการลา",
-          icon: Sparkles,
-          permission: PERMISSIONS.POLICY_MANAGE,
-        },
-        {
-          href: "/admin/leave-balance",
-          label: "โควตาและยอดวันลา",
-          icon: Scale,
-          permission: PERMISSIONS.POLICY_MANAGE,
-        },
-        {
-          href: "/admin/leave-years",
-          label: "ปีลางาน",
-          icon: CalendarRange,
-          permission: PERMISSIONS.POLICY_MANAGE,
-        },
-        {
-          href: "/admin/holidays",
-          label: "ปฏิทินวันหยุดบริษัท",
-          icon: CalendarDays,
-          permission: PERMISSIONS.HOLIDAY_MANAGE,
-        },
-      ],
-    },
-    {
       group: "LINE & การสื่อสาร",
       items: [
         {
@@ -151,7 +176,7 @@ export function AdminSidebarLayout({
       ],
     },
     {
-      group: "รายงาน & ประวัติการทำงาน",
+      group: "รายงาน & ระบบ",
       items: [
         {
           href: "/admin/reports",
@@ -165,11 +190,6 @@ export function AdminSidebarLayout({
           icon: ShieldAlert,
           permission: PERMISSIONS.AUDIT_READ,
         },
-      ],
-    },
-    {
-      group: "ระบบ & นโยบาย",
-      items: [
         {
           href: "/admin/users",
           label: "ผู้ใช้เข้าสู่ระบบ",
@@ -355,15 +375,14 @@ export function AdminSidebarLayout({
                 QR Code บริษัท
               </Button>
 
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsPasswordModalOpen(true)}
-                className="w-full h-8 text-xs font-medium text-[#0d253d] border-[#e3e8ee] bg-[#f6f9fc] hover:bg-[#533afd]/10 hover:text-[#533afd] hover:border-[#533afd]/30 justify-center rounded-full"
+              <Link
+                href="/admin/profile"
+                onClick={() => setIsMobileOpen(false)}
+                className="w-full h-8 inline-flex items-center justify-center rounded-full text-xs font-medium text-[#0d253d] border border-[#e3e8ee] bg-[#f6f9fc] hover:bg-[#533afd]/10 hover:text-[#533afd] hover:border-[#533afd]/30 transition-colors"
               >
-                <KeyRound className="h-3.5 w-3.5 mr-1.5 text-[#533afd]" />
-                เปลี่ยนรหัสผ่าน
-              </Button>
+                <UserRound className="h-3.5 w-3.5 mr-1.5 text-[#533afd]" />
+                ข้อมูลส่วนตัว
+              </Link>
 
               <Button
                 variant="outline"
@@ -378,12 +397,6 @@ export function AdminSidebarLayout({
           </div>
         </div>
       </aside>
-
-      {/* Change Password Modal */}
-      <ChangePasswordModal
-        open={isPasswordModalOpen}
-        onOpenChange={setIsPasswordModalOpen}
-      />
 
       {/* Company QR Code Modal */}
       <CompanyQrModal

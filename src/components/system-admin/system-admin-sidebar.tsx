@@ -15,14 +15,13 @@ import {
   X,
   ChevronRight,
   ShieldCheck,
-  KeyRound,
   Laptop,
   Activity,
   Database,
   Key,
+  UserRound,
 } from "lucide-react";
 import { logoutAdminAction } from "@/features/auth";
-import { ChangePasswordModal } from "@/components/admin/change-password-modal";
 
 interface SystemAdminSidebarProps {
   userName: string;
@@ -31,7 +30,6 @@ interface SystemAdminSidebarProps {
 export function SystemAdminSidebar({ userName }: SystemAdminSidebarProps) {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
-  const [isPasswordModalOpen, setIsPasswordModalOpen] = React.useState(false);
 
   const navigationItems = [
     {
@@ -242,15 +240,14 @@ export function SystemAdminSidebar({ userName }: SystemAdminSidebarProps) {
             </div>
 
             <div className="mt-2.5 space-y-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsPasswordModalOpen(true)}
-                className="w-full h-8 text-xs font-medium text-[#0d253d] border-[#e3e8ee] bg-[#f6f9fc] hover:bg-[#533afd]/10 hover:text-[#533afd] justify-center rounded-full"
+              <Link
+                href="/system-admin/profile"
+                onClick={() => setIsMobileOpen(false)}
+                className="w-full h-8 inline-flex items-center justify-center rounded-full text-xs font-medium text-[#0d253d] border border-[#e3e8ee] bg-[#f6f9fc] hover:bg-[#533afd]/10 hover:text-[#533afd] hover:border-[#533afd]/30 transition-colors"
               >
-                <KeyRound className="h-3.5 w-3.5 mr-1.5 text-[#533afd]" />
-                เปลี่ยนรหัสผ่าน
-              </Button>
+                <UserRound className="h-3.5 w-3.5 mr-1.5 text-[#533afd]" />
+                ข้อมูลส่วนตัว
+              </Link>
 
               <Button
                 variant="outline"
@@ -265,12 +262,6 @@ export function SystemAdminSidebar({ userName }: SystemAdminSidebarProps) {
           </div>
         </div>
       </aside>
-
-      {/* Change Password Modal */}
-      <ChangePasswordModal
-        open={isPasswordModalOpen}
-        onOpenChange={setIsPasswordModalOpen}
-      />
     </>
   );
 }

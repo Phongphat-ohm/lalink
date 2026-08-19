@@ -91,8 +91,12 @@ export async function runCarryForwardForCompany(
       }
 
       // Compute carryable amount (capped by leave type policy).
+      // A null or zero cap means unlimited carry-forward.
       const { allowCarryForward, maxCarryForwardDays } = source.leaveType;
-      const cap = maxCarryForwardDays != null ? Number(maxCarryForwardDays) : remaining;
+      const cap =
+        maxCarryForwardDays != null && Number(maxCarryForwardDays) > 0
+          ? Number(maxCarryForwardDays)
+          : remaining;
       const carryable = allowCarryForward ? Math.min(remaining, cap) : 0;
       const expired = remaining - carryable;
 

@@ -53,6 +53,15 @@ export interface SerializedLeaveRequest {
   rejectionReason: string | null;
   approvedBy: string | null;
   createdAt: string;
+  approvals: {
+    id: string;
+    stepOrder: number;
+    roleCode: string | null;
+    status: string;
+    comment: string | null;
+    approverId: string | null;
+    actedAt: string | null;
+  }[];
   employee: {
     id: string;
     employeeCode: string;
@@ -196,6 +205,21 @@ export function LeaveRequestsTable({
       default:
         return "เต็มวัน";
     }
+  };
+
+  const ROLE_LABELS: Record<string, string> = {
+    MANAGER: "หัวหน้างาน",
+    HR: "ฝ่ายบุคคล",
+    HR_ADMIN: "ผู้บริหาร HR",
+    COMPANY_ADMIN: "ผู้ดูแลระบบ",
+    ADMIN: "ผู้ดูแลระบบ",
+  };
+
+  const APPROVAL_STATUS_LABELS: Record<string, string> = {
+    PENDING: "รอดำเนินการ",
+    APPROVED: "อนุมัติ",
+    REJECTED: "ไม่อนุมัติ",
+    SKIPPED: "ข้ามขั้น",
   };
 
   return (
@@ -507,6 +531,89 @@ export function LeaveRequestsTable({
                   {selectedRequest.reason || "ไม่ระบุเหตุผล"}
                 </p>
               </div>
+
+              {/* Approval Workflow Progress */}
+              {selectedRequest.approvals.length > 0 && (
+                <div className="rounded-xl border border-[#e3e8ee] p-3.5 text-xs space-y-2.5 bg-white">
+                  <div className="flex items-center space-x-2 text-[#0d253d] font-semibold">
+                    <FileCheck className="h-4 w-4 text-[#533afd]" />
+                    <span>สายการอนุมัติ (หลายขั้นตอน)</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {selectedRequest.approvals.map((approval) => {
+                      const isApproved = approval.status === "APPROVED";
+                      const isRejected = approval.status === "REJECTED";
+                      const isPending = approval.status === "PENDING";
+                      const isSkipped = approval.status === "SKIPPED";
+
+                      return (
+                        <div
+                          key={approval.id}
+                          className={`flex items-center justify-between rounded-lg border px-3 py-2 ${
+                            isApproved
+                              ? "border-[#a7f3d0] bg-[#ecfdf5]"
+                              : isRejected
+                                ? "border-[#fecdd3] bg-[#ffe4e6]"
+                                : isSkipped
+                                  ? "border-[#e3e8ee] bg-[#f6f9fc]"
+                                  : "border-[#e2e8f0] bg-[#f8fafc]"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={`flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold font-mono shrink-0 ${
+                                isApproved
+                                  ? "bg-[#059669] text-white"
+                                  : isRejected
+                                    ? "bg-[#ea2261] text-white"
+                                    : isSkipped
+                                      ? "bg-[#94a3b8] text-white"
+                                      : "bg-[#533afd] text-white"
+                              }`}
+                            >
+                              {isApproved ? (
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                              ) : isRejected ? (
+                                <XCircle className="h-3.5 w-3.5" />
+                              ) : (
+                                approval.stepOrder
+                              )}
+                            </span>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-[#0d253d] truncate">
+                                ขั้นตอนที่ {approval.stepOrder}:{" "}
+                                {ROLE_LABELS[approval.roleCode ?? ""] ??
+                                  approval.roleCode ??
+                                  "-"}
+                              </p>
+                              {approval.comment && (
+                                <p className="text-[11px] text-[#64748d] truncate">
+                                  {approval.comment}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                          <Badge
+                            variant={
+                              isApproved
+                                ? "success"
+                                : isRejected
+                                  ? "destructive"
+                                  : isSkipped
+                                    ? "outline"
+                                    : "warning"
+                            }
+                            className="rounded-full text-[10px] py-0.5 shrink-0"
+                          >
+                            {APPROVAL_STATUS_LABELS[approval.status] ??
+                              approval.status}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Rejection Note if Rejected */}
               {selectedRequest.status === "REJECTED" &&

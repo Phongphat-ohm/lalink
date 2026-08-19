@@ -29,6 +29,10 @@ export default async function AdminLeaveTypesPage() {
     description: lt.description,
     defaultDays: Number(lt.defaultDays),
     allowHalfDay: lt.allowHalfDay,
+    allowHourly: lt.allowHourly,
+    allowCarryForward: lt.allowCarryForward,
+    maxCarryForwardDays:
+      lt.maxCarryForwardDays !== null ? Number(lt.maxCarryForwardDays) : null,
     requireReason: lt.requireReason,
     isPaid: lt.isPaid,
     isActive: lt.isActive,

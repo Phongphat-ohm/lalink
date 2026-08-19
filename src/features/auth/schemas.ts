@@ -44,3 +44,18 @@ export const adminResetPasswordSchema = z.object({
 });
 
 export type AdminResetPasswordInput = z.infer<typeof adminResetPasswordSchema>;
+
+export const updateProfileSchema = z.object({
+  name: z
+    .string()
+    .min(1, "กรุณากรอกชื่อ-นามสกุล")
+    .max(100, "ชื่อยาวเกิน 100 ตัวอักษร")
+    .trim(),
+  email: z
+    .string()
+    .email("รูปแบบอีเมลไม่ถูกต้อง")
+    .trim()
+    .toLowerCase(),
+});
+
+export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;

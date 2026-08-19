@@ -1,9 +1,17 @@
 import { prisma } from "@/lib/database";
-import { WorkSchedule, WorkScheduleEntry, WorkScheduleScope } from "@prisma/client";
+import {
+  Shift,
+  ShiftEntry,
+  WorkSchedule,
+  WorkScheduleEntry,
+  WorkScheduleScope,
+} from "@prisma/client";
 import type { WorkScheduleEntryInput } from "./calculator";
 
 export interface ResolvedWorkSchedule {
   schedule: WorkSchedule | null;
+  /** The shift that supplied the effective entries (when applicable). */
+  shift: Shift | null;
   entries: WorkScheduleEntryInput[];
   /** The working hours per day-of-week derived from schedule time slots. */
   workingHoursByDay: Record<number, number>;
@@ -12,11 +20,11 @@ export interface ResolvedWorkSchedule {
 /**
  * Resolves the effective work schedule for an employee using the
  * most-specific-first precedence:
- *   EMPLOYEE > DEPARTMENT > BRANCH > COMPANY
+ *   EMPLOYEE shift > EMPLOYEE schedule > DEPARTMENT > BRANCH > COMPANY
  *
- * Returns the first active schedule found at any scope. When no active
- * schedule exists, returns a null schedule (caller falls back to the
- * default Sat/Sun weekend behaviour).
+ * Returns the first active match found at any scope. When no active
+ * schedule or shift exists, returns a null schedule (caller falls back to
+ * the default Sat/Sun weekend behaviour).
  */
 export async function resolveEffectiveWorkSchedule(
   companyId: string,
@@ -24,13 +32,22 @@ export async function resolveEffectiveWorkSchedule(
 ): Promise<ResolvedWorkSchedule> {
   const employee = await prisma.employee.findFirst({
     where: { id: employeeId, companyId },
-    select: { branchId: true, departmentId: true },
+    select: { branchId: true, departmentId: true, shiftId: true },
   });
 
   if (!employee) {
-    return { schedule: null, entries: [], workingHoursByDay: {} };
+    return { schedule: null, shift: null, entries: [], workingHoursByDay: {} };
   }
 
+  // 1. Employee-level shift takes highest precedence.
+  if (employee.shiftId) {
+    const shift = await findActiveShiftById(companyId, employee.shiftId);
+    if (shift) {
+      return normalizeShift(shift);
+    }
+  }
+
+  // 2. Work schedules scoped EMPLOYEE > DEPARTMENT > BRANCH > COMPANY.
   const candidates: Record<WorkScheduleScope, string | null> = {
     [WorkScheduleScope.EMPLOYEE]: employeeId,
     [WorkScheduleScope.DEPARTMENT]: employee.departmentId,
@@ -51,7 +68,10 @@ export async function resolveEffectiveWorkSchedule(
       isActive: true,
       scope: { in: scopes },
     },
-    include: { entries: { orderBy: { dayOfWeek: "asc" } } },
+    include: {
+      entries: { orderBy: { dayOfWeek: "asc" } },
+      shift: { include: { entries: { orderBy: { dayOfWeek: "asc" } } } },
+    },
     orderBy: { createdAt: "asc" },
   });
 
@@ -63,11 +83,25 @@ export async function resolveEffectiveWorkSchedule(
       (s) => s.scope === scope && scopeTargetMatches(s, scope, target),
     );
     if (match) {
+      // A schedule bound to a shift uses the shift's time slots.
+      if (match.shift && match.shift.isActive) {
+        return normalizeShift(match.shift);
+      }
       return normalizeSchedule(match);
     }
   }
 
-  return { schedule: null, entries: [], workingHoursByDay: {} };
+  return { schedule: null, shift: null, entries: [], workingHoursByDay: {} };
+}
+
+async function findActiveShiftById(
+  companyId: string,
+  shiftId: string,
+): Promise<(Shift & { entries: ShiftEntry[] }) | null> {
+  return prisma.shift.findFirst({
+    where: { id: shiftId, companyId, isActive: true },
+    include: { entries: { orderBy: { dayOfWeek: "asc" } } },
+  });
 }
 
 function scopeTargetMatches(
@@ -87,29 +121,58 @@ function scopeTargetMatches(
   }
 }
 
-function normalizeSchedule(schedule: WorkSchedule & {
-  entries: WorkScheduleEntry[];
-}): ResolvedWorkSchedule {
-  const entries: WorkScheduleEntryInput[] = schedule.entries.map((e) => ({
-    dayOfWeek: e.dayOfWeek,
-    startTime: e.startTime,
-    endTime: e.endTime,
-    isWorkingDay: e.isWorkingDay,
-  }));
+function toEntryInput(
+  dayOfWeek: number,
+  startTime: string | null,
+  endTime: string | null,
+  isWorkingDay: boolean,
+): WorkScheduleEntryInput {
+  return { dayOfWeek, startTime, endTime, isWorkingDay };
+}
 
+function computeWorkingHoursByDay(
+  entries: WorkScheduleEntryInput[],
+): Record<number, number> {
   const workingHoursByDay: Record<number, number> = {};
-  for (const e of schedule.entries) {
+  for (const e of entries) {
     if (!e.isWorkingDay || !e.startTime || !e.endTime) {
       workingHoursByDay[e.dayOfWeek] = 0;
       continue;
     }
     const [sh, sm] = e.startTime.split(":").map(Number);
     const [eh, em] = e.endTime.split(":").map(Number);
-    const hours = (eh * 60 + em - (sh * 60 + sm)) / 60;
-    workingHoursByDay[e.dayOfWeek] = hours > 0 ? hours : 0;
+    let minutes = eh * 60 + em - (sh * 60 + sm);
+    // Overnight shift (end before start) wraps to the next day.
+    if (minutes < 0) minutes += 24 * 60;
+    workingHoursByDay[e.dayOfWeek] = minutes > 0 ? minutes / 60 : 0;
   }
+  return workingHoursByDay;
+}
 
-  return { schedule, entries, workingHoursByDay };
+function normalizeShift(shift: Shift & { entries: ShiftEntry[] }): ResolvedWorkSchedule {
+  const entries: WorkScheduleEntryInput[] = shift.entries.map((e) =>
+    toEntryInput(e.dayOfWeek, e.startTime, e.endTime, e.isWorkingDay),
+  );
+  return {
+    schedule: null,
+    shift,
+    entries,
+    workingHoursByDay: computeWorkingHoursByDay(entries),
+  };
+}
+
+function normalizeSchedule(schedule: WorkSchedule & {
+  entries: WorkScheduleEntry[];
+}): ResolvedWorkSchedule {
+  const entries: WorkScheduleEntryInput[] = schedule.entries.map((e) =>
+    toEntryInput(e.dayOfWeek, e.startTime, e.endTime, e.isWorkingDay),
+  );
+  return {
+    schedule,
+    shift: null,
+    entries,
+    workingHoursByDay: computeWorkingHoursByDay(entries),
+  };
 }
 
 export type { WorkScheduleScope };

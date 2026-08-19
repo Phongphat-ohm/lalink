@@ -147,6 +147,31 @@ export async function getSession(): Promise<SessionPayload | null> {
       }
     }
 
+    // Live status check for EMPLOYEE sessions: reject when the employee is
+    // no longer active (resigned/terminated/suspended/inactive) so that a
+    // previously-issued JWT cannot be used to access the LIFF app.
+    if (payload.type === "EMPLOYEE" && payload.employeeId) {
+      try {
+        const employee = await prisma.employee.findUnique({
+          where: { id: payload.employeeId },
+          select: { status: true, lineUserId: true, company: { select: { status: true } } },
+        });
+
+        if (
+          !employee ||
+          employee.status === "RESIGNED" ||
+          employee.status === "TERMINATED" ||
+          employee.status === "SUSPENDED" ||
+          employee.status === "INACTIVE" ||
+          employee.company?.status !== "ACTIVE"
+        ) {
+          return null;
+        }
+      } catch {
+        return null;
+      }
+    }
+
     return payload;
   } catch {
     return null;

@@ -53,6 +53,54 @@ async function addPositionServerAction(name: string, code: string) {
   }
 }
 
+async function updateDepartmentServerAction(
+  id: string,
+  name: string,
+  code: string,
+) {
+  "use server";
+  const session = await getSession();
+  if (!session || !session.companyId) {
+    return { success: false, message: "Unauthorized" };
+  }
+
+  try {
+    await prisma.department.update({
+      where: { id },
+      data: { name, code: code.toUpperCase() },
+    });
+    revalidatePath("/admin/departments");
+    return { success: true };
+  } catch (err) {
+    console.error("Update Department Error:", err);
+    return { success: false, message: "ไม่สามารถแก้ไขแผนกได้" };
+  }
+}
+
+async function updatePositionServerAction(
+  id: string,
+  name: string,
+  code: string,
+) {
+  "use server";
+  const session = await getSession();
+  if (!session || !session.companyId) {
+    return { success: false, message: "Unauthorized" };
+  }
+
+  try {
+    await prisma.position.update({
+      where: { id },
+      data: { name, code: code.toUpperCase() },
+    });
+    revalidatePath("/admin/departments");
+    return { success: true };
+  } catch (err) {
+    console.error("Update Position Error:", err);
+    return { success: false, message: "ไม่สามารถแก้ไขตำแหน่งได้" };
+  }
+}
+
 export default async function AdminDepartmentsPage() {
   const { companyId } = await requireAdminPermission(
     PERMISSIONS.ORGANIZATION_MANAGE,
@@ -77,6 +125,8 @@ export default async function AdminDepartmentsPage() {
       positions={positions}
       onAddDepartment={addDepartmentServerAction}
       onAddPosition={addPositionServerAction}
+      onUpdateDepartment={updateDepartmentServerAction}
+      onUpdatePosition={updatePositionServerAction}
     />
   );
 }

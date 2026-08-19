@@ -91,9 +91,12 @@ export function calculateLeaveDays(options: LeaveCalculationOptions): {
 
     const [startHour, startMinute] = entry.startTime.split(":").map(Number);
     const [endHour, endMinute] = entry.endTime.split(":").map(Number);
-    const diffHours =
-      (endHour * 60 + endMinute - (startHour * 60 + startMinute)) / 60;
-    return diffHours > 0 ? diffHours : null;
+    let diffMinutes =
+      endHour * 60 + endMinute - (startHour * 60 + startMinute);
+    // Overnight shift (end before start) wraps to the next day.
+    if (diffMinutes < 0) diffMinutes += 24 * 60;
+    if (diffMinutes <= 0) return null;
+    return diffMinutes / 60;
   };
 
   /**

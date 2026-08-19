@@ -17,7 +17,7 @@ export function LiffNav() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#e3e8ee] bg-white/95 backdrop-blur-md shadow-[0_-1px_6px_rgba(0,55,112,0.04)]">
-      <div className="max-w-md mx-auto flex items-center justify-around py-2.5">
+      <div className="flex items-center justify-around py-2.5 max-w-2xl mx-auto">
         {navItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;

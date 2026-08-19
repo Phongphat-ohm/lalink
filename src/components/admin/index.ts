@@ -8,3 +8,4 @@ export * from "./holiday-view";
 export * from "./report-view";
 export * from "./admin-calendar-view";
 export * from "./admin-settings-view";
+export * from "./profile-settings-view";

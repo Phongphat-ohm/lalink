@@ -55,7 +55,7 @@ export default async function LiffLeavePage() {
   }));
 
   return (
-    <div className="min-h-screen bg-slate-50 p-4 pb-24 max-w-md mx-auto">
+    <div className="min-h-screen bg-slate-50 p-4 pb-24">
       {/* Top Header */}
       <div className="flex items-center space-x-3 py-3 border-b border-slate-200">
         <Link href="/liff/dashboard">
