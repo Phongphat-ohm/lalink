@@ -341,24 +341,25 @@ Next.js App Runtime
 
 **เป้าหมาย**: เตรียม Production Multi-stage Dockerfile, คู่มือการ Deploy บน Coolify, กลยุทธ์ Backup และ Health Monitoring
 
-- [ ] **13.1 Production Dockerfile (Multi-stage Build)**
-  - [ ] Stage 1: `dependencies` (ติดตั้ง Production & Dev Deps)
-  - [ ] Stage 2: `builder` (Compile TypeScript, Prisma Client, Next.js Standalone Build)
-  - [ ] Stage 3: `runner` (Minimal Alpine/Distroless Image, Non-root User)
-- [ ] **13.2 Coolify Deployment Setup & Automation**
-  - [ ] กำหนด Build Command (`npm run build`) และ Start Command (`node server.js`)
-  - [ ] Automation Script รัน `prisma migrate deploy` ก่อนเริ่ม Container
-  - [ ] ตั้งค่า Health Check Endpoint `/api/health`
-- [ ] **13.3 Backup & Disaster Recovery Plan**
-  - [ ] แผนสำรองข้อมูล PostgreSQL Daily/Weekly Backup Script
-  - [ ] คู่มือการกู้คืนข้อมูล (Restore Procedure Documentation)
-- [ ] **13.4 Final Technical Documentation**
-  - [ ] อัปเดต `README.md` ฉบับสมบูรณ์ (Setup Guide, Env Guide, CLI Commands)
-  - [ ] จัดทำเอกสารใน `docs/` (Architecture, Database ERD, Security, Deployment)
-- [ ] **13.5 Final Production Verification Gate**
-  - [ ] รัน Lint, Type Check, All Tests, Prisma Validate และ Production Build ผ่าน 100%
+- [x] **13.1 Production Dockerfile (Multi-stage Build)**
+  - [x] Stage 1: `dependencies` (ติดตั้ง Production & Dev Deps)
+  - [x] Stage 2: `builder` (Compile TypeScript, Prisma Client, Next.js Standalone Build)
+  - [x] Stage 3: `runner` (Minimal Alpine/Distroless Image, Non-root User)
+- [x] **13.2 Coolify Deployment Setup & Automation**
+  - [x] กำหนด Build Command (`npm run build`) และ Start Command (`node server.js` / `next start`)
+  - [x] Automation Script รัน `prisma migrate deploy` ก่อนเริ่ม Container (`docker/entrypoint.sh`)
+  - [x] ตั้งค่า Health Check Endpoint `/api/health`
+- [x] **13.3 Backup & Disaster Recovery Plan**
+  - [x] แผนสำรองข้อมูล PostgreSQL Daily/Weekly Backup Strategy
+  - [x] คู่มือการกู้คืนข้อมูล (Restore Procedure Documentation)
+- [x] **13.4 Final Technical Documentation**
+  - [x] อัปเดต `README.md` ฉบับสมบูรณ์ (Setup Guide, Env Guide, CLI Commands)
+  - [x] จัดทำเอกสารใน `docs/` (Architecture, Database ERD, Security, Deployment)
+- [x] **13.5 Final Production Verification Gate**
+  - [x] รัน Lint, Type Check, All Tests, Prisma Validate และ Production Build ผ่าน 100%
 
 ---
+
 
 ## 4. แบบฟอร์มรายงานสรุปผลหลังจบแต่ละ Task
 
