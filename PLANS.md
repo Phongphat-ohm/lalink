@@ -11,7 +11,7 @@
 
 - [1. ภาพรวมและมาตรฐานสถาปัตยกรรม (Architecture & Standards)](#1-ภาพรวมและมาตรฐานสถาปัตยกรรม)
 - [2. กฎเหล็กและกระบวนการตรวจสอบคุณภาพ (Quality Gate & Protocol)](#2-กฎเหล็กและกระบวนการตรวจสอบคุณภาพ)
-- [3. แผนการดำเนินงาน 13 Phases (Phase-by-Phase Roadmap)](#3-แผนการดำเนินงาน-13-phases)
+- [3. แผนการดำเนินงาน 17 Phases (Phase-by-Phase Roadmap)](#3-แผนการดำเนินงาน-17-phases)
   - [Phase 1: Project Foundation & Core Infrastructure](#phase-1-project-foundation--core-infrastructure)
   - [Phase 2: Database Schema, Migration & Seeding](#phase-2-database-schema-migration--seeding)
   - [Phase 3: Authentication & Central RBAC Engine](#phase-3-authentication--central-rbac-engine)
@@ -25,6 +25,10 @@
   - [Phase 11: Security Hardening, PDPA & Privacy](#phase-11-security-hardening-pdpa--privacy)
   - [Phase 12: Comprehensive Automated Testing Suite](#phase-12-comprehensive-automated-testing-suite)
   - [Phase 13: Production Readiness, Docker & Deployment](#phase-13-production-readiness-docker--deployment)
+  - [Phase 14: System Admin Enterprise CRUDs & Subscriptions](#phase-14-system-admin-enterprise-cruds--subscriptions)
+  - [Phase 15: System Admin Operations, Real Health & Security](#phase-15-system-admin-operations-real-health--security)
+  - [Phase 16: Company Admin & HR CRUD Enhancements](#phase-16-company-admin--hr-crud-enhancements)
+  - [Phase 17: Comprehensive Automated Testing & Quality Gate](#phase-17-comprehensive-automated-testing--quality-gate)
 - [4. แบบฟอร์มรายงานสรุปผลหลังจบแต่ละ Task (Reporting Template)](#4-แบบฟอร์มรายงานสรุปผลหลังจบแต่ละ-task)
 
 ---
@@ -359,6 +363,83 @@ Next.js App Runtime
   - [x] รัน Lint, Type Check, All Tests, Prisma Validate และ Production Build ผ่าน 100%
 
 ---
+
+### Phase 14: System Admin Enterprise CRUDs & Subscriptions
+
+**เป้าหมาย**: พัฒนาระบบ CRUD และการจัดการองค์กร/ผู้ดูแลระดับ Super Admin ให้ครบถ้วนสมบูรณ์ พร้อมระบบจัดการ SaaS Plans & Subscriptions
+
+- [ ] **14.1 SaaS Plans & Pricing Management (`/system-admin/plans`)**
+  - [ ] พัฒนา Server Actions: `createPlanAction`, `updatePlanAction`, `deletePlanAction`, `togglePlanActiveAction`
+  - [ ] พัฒนาหน้า UI `/system-admin/plans` พร้อม Modal สร้าง/แก้ไข Plan (กำหนดชื่อ, โควตา `maxEmployees`, `maxAdmins`, ราคาต่อเดือน/ปี, Feature flags)
+- [ ] **14.2 Tenant Subscriptions & Entitlements Engine (`/system-admin/subscriptions`)**
+  - [ ] พัฒนา Server Actions: `assignCompanyPlanAction`, `updateSubscriptionStatusAction`, `extendTrialAction`, `cancelSubscriptionAction`
+  - [ ] พัฒนาหน้า UI `/system-admin/subscriptions` ดูและจัดการสถานะการสมัครของทุกบริษัท
+  - [ ] พัฒนา `EntitlementService` (`src/lib/subscription/entitlement.ts`) ตรวจสอบโควตาพนักงาน/แอดมินก่อนสร้าง
+- [ ] **14.3 Full Tenant Company CRUD & Details View (`/system-admin/companies`)**
+  - [ ] พัฒนา Server Actions: `updateCompanySuperAdminAction`, `deleteCompanySuperAdminAction`, `getCompanyDetailAction`
+  - [ ] พัฒนา Modal แก้ไขข้อมูลบริษัท (ชื่อ, เลขผู้เสียภาษี, ข้อมูลติดต่อ, ที่อยู่)
+  - [ ] พัฒนา Drawer/Modal ดูรายละเอียดบริษัทเชิงลึก (Tenant Overview, สถิติการใช้งาน, แผนก, Subscription)
+- [ ] **14.4 Platform User & Admin CRUD (`/system-admin/users`)**
+  - [ ] พัฒนา Server Actions: `createUserSuperAdminAction`, `updateUserSuperAdminAction`, `deleteUserSuperAdminAction`, `toggleUserStatusSuperAdminAction`
+  - [ ] พัฒนา Modal สร้าง Admin บัญชีใหม่ และ Modal แก้ไขข้อมูล/เปลี่ยน Role/เปลี่ยนสถานะ
+- [ ] **14.5 Cross-Tenant Employee Management (`/system-admin/employees`)**
+  - [ ] เพิ่มระบบค้นหา (Search), กรองตามบริษัท (Company Filter), กรองตามสถานะ, และ Pagination
+  - [ ] พัฒนา Action ปุ่ม "ปลดการผูก LINE (Unlink LINE)" จากส่วนกลางเมื่อพนักงานผูกผิดบัญชี
+
+---
+
+### Phase 15: System Admin Operations, Real Health & Security
+
+**เป้าหมาย**: เปลี่ยนระบบจำลอง (Mock) ใน Super Admin ให้เป็นระบบที่ทำงานจริง 100%
+
+- [ ] **15.1 Real Database Snapshot Backup & Download Stream (`/system-admin/backup`)**
+  - [ ] เปลี่ยนจาก Simulated Random Bytes เป็นการรัน JSON/SQL Snapshot Export ฐานข้อมูลจริง
+  - [ ] พัฒนา Endpoint `/api/system-admin/backup/[id]/download` สำหรับดาวน์โหลดไฟล์สำรอง `.json.gz`
+  - [ ] เพิ่มปุ่ม "ดาวน์โหลดไฟล์สำรอง" บนหน้า UI `/system-admin/backup`
+- [ ] **15.2 Real Infrastructure Health Checks & Metrics (`/system-admin/health`)**
+  - [ ] เปลี่ยนค่า Latency ที่ Hardcoded เป็น Real Ping: ตรวจสอบ S3 Bucket Storage, LINE API Endpoint, และ Database Pool
+  - [ ] แสดงข้อมูล Server Load & Memory Usage จริง (`process.memoryUsage()`, Node.js Process Uptime)
+- [ ] **15.3 Security Center IP Blocklist & Live Rate Limiting (`/system-admin/security`)**
+  - [ ] พัฒนา Server Actions: `blockIpAddressAction`, `unblockIpAddressAction`, `getLiveRateLimitStatsAction`
+  - [ ] เพิ่ม UI จัดการ IP Blocklist และดึงสถิติ Rate Limit Blocks จากตาราง `RateLimitEntry` จริง
+
+---
+
+### Phase 16: Company Admin & HR CRUD Enhancements
+
+**เป้าหมาย**: เพิ่มฟังก์ชัน CRUD และ Action สำคัญสำหรับ Company Admin และ HR
+
+- [ ] **16.1 HR Proxy Leave Request Submission & Revocation (`/admin/leave-requests`)**
+  - [ ] พัฒนา Server Action `createLeaveRequestByHrAction` ให้ HR ยื่นใบลาแทนพนักงานกรณีฉุกเฉิน
+  - [ ] พัฒนา Server Action `revokeApprovedLeaveAction` ยกเลิกใบลาที่อนุมัติแล้ว พร้อมคืนยอด Balance (`REVERSAL`) และแจ้งเตือน LINE
+  - [ ] เพิ่มปุ่ม "ยื่นใบลาแทนพนักงาน" และปุ่ม "เพิกถอนใบลา" บนหน้า `/admin/leave-requests`
+- [ ] **16.2 Holiday Bulk Import & Annual Calendar Automation (`/admin/holidays`)**
+  - [ ] พัฒนา Server Action `importOfficialHolidaysAction` ดึงวันหยุดนักขัตฤกษ์ไทยประจำปีเข้าสู่ปฏิทินบริษัทอัตโนมัติ
+  - [ ] เพิ่มปุ่ม "โหลดวันหยุดนักขัตฤกษ์ไทยอัตโนมัติ" บนหน้า `/admin/holidays`
+- [ ] **16.3 Batch Leave Balance Adjustment (`/admin/leave-balance`)**
+  - [ ] พัฒนา Server Action `batchAdjustLeaveBalanceAction` ปรับปรุงยอดวันลาแบบกลุ่มรายแผนกหรือทั้งบริษัท
+  - [ ] เพิ่ม Modal ปรับยอดวันลาแบบกลุ่มบนหน้า `/admin/leave-balance`
+
+---
+
+### Phase 17: Comprehensive Automated Testing & Quality Gate
+
+**เป้าหมาย**: เขียนชุดทดสอบครอบคลุมทุก CRUD และฟังก์ชันใหม่ พร้อมรัน Quality Gate ผ่าน 100%
+
+- [ ] **17.1 Automated Unit & Integration Tests**
+  - [ ] ทดสอบ Plan & Subscription CRUD และ Entitlement Limits
+  - [ ] ทดสอบ Company & User Edit/Delete Actions
+  - [ ] ทดสอบ Real Backup Export & Download Endpoint
+  - [ ] ทดสอบ HR Proxy Leave Submission & Approved Leave Revocation
+- [ ] **17.2 Final Quality Gate**
+  - [ ] `npm run lint` — PASS 100%
+  - [ ] `npm run type-check` — PASS 100%
+  - [ ] `npm run test` — All Test Suites PASS 100%
+  - [ ] `npx prisma validate` — PASS 100%
+  - [ ] `npx next build` — PASS 100%
+
+---
+
 
 
 ## 4. แบบฟอร์มรายงานสรุปผลหลังจบแต่ละ Task
