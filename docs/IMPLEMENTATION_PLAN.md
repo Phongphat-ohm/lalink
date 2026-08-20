@@ -1,350 +1,189 @@
-# LALINK — Implementation Plan (PHASE 0 Audit Result)
+# LALINK — Comprehensive Master Implementation Plan
 
-> Generated: 2026-08-18
-> Audit Scope: Full codebase — Prisma Schema, Auth, RBAC, Tenant Isolation, Leave System, LINE/S3/Notification, Tests, Docker, Environment
-
----
-
-## Current Architecture
-
-- **Framework**: Next.js 16 (App Router) + React 19 + TypeScript Strict
-- **Database**: PostgreSQL + Prisma ORM v7
-- **Auth**: JWT Session Cookies (HS256, HttpOnly, Secure, 7-day expiry) via `jose`
-- **Password**: bcryptjs (10 salt rounds)
-- **LINE**: LIFF SDK v2.30 + LINE Messaging API (Flex Messages)
-- **Storage**: S3-compatible (AWS SDK v3) with Pre-signed URLs
-- **UI**: Tailwind CSS v4 + shadcn/ui + Lucide Icons
-- **Testing**: Vitest 4.x (16 test files in `tests/unit/`)
-- **Validation**: Zod v4
-- **Security**: In-memory Rate Limiter, Audit Logger with Sanitization, PDPA Anonymization
+> **Project**: ระบบลางานออนไลน์ Multi-Tenant SaaS ผ่าน LINE LIFF  
+> **Last Updated**: 2026-08-20  
+> **Scope**: Full Platform Audit, Architecture, System Admin, Company Admin, Employee LIFF, SaaS Subscription & Enterprise Operations
 
 ---
 
-## Existing Features
+## 📑 สารบัญแผนงาน (Table of Contents)
 
-### Employee (LINE LIFF)
-- Account Linking (QR Scan + Employee Code + DOB + PDPA Consent)
-- Dashboard (Leave Balance Summary, Calendar, Recent Requests)
-- Leave Request Submission (Type, Dates, Half-Day, Reason, Attachment, Balance Check, Overlap Check)
-- Leave History (List, Detail Modal, Cancel Pending)
-- Profile View + Logout
-- LINE Flex Message Notifications (Submit/Approve/Reject/Cancel)
-- Auto-login with Loop Protection
-
-### Company Admin / HR (Web Portal)
-- Login with Brute-force Protection
-- Dashboard (Metrics: Active Employees, Pending Requests, On Leave Today)
-- Employee CRUD (with department/position assignment)
-- Department & Position Management
-- Branch Management
-- Leave Request Approval/Rejection (with Balance Adjustment + Audit)
-- Leave Type Policy Configuration
-- Holiday Management
-- Calendar View (All Employees + Department Filter)
-- Leave Balance Overview + Manual Adjustment
-- LINE Account Status View
-- Announcement Management (Target: All/Branch/Department)
-- Audit Trail (Last 50 entries)
-- Company Settings
-
-### System Admin (Platform Control)
-- Company/Tenant CRUD (Create with Auto-code + Default Config)
-- Suspend/Activate Tenants
-- User Management (Cross-tenant, Password Reset)
-- Employee Cross-tenant View
-- Session Management (Force Logout)
-- Security Center (Events, Severity, Failed Logins)
-- Platform Audit Logs
-- System Health (Real-time 6-service Monitoring with Latency)
-- Manual Database Backup (Simulated)
-- API Key CRUD (SHA256 Hash, One-time Display)
-- Change Password (Self-service)
-
-### Infrastructure
-- Multi-Tenant Isolation (Scoped DAL with `companyId` enforcement)
-- RBAC (6 roles: SYSTEM_ADMIN, COMPANY_ADMIN, HR_ADMIN, HR, MANAGER, EMPLOYEE)
-- 34 Permissions defined in static matrix
-- HTTP Security Headers (CSP, HSTS, X-Content-Type-Options, Permissions-Policy)
-- Health Check Endpoint (`/api/health`)
-- Audit Logger with Sensitive Key Redaction
-- PDPA Anonymization (Right to Erasure)
+1. [ภาพรวมสถาปัตยกรรมระบบ (Current Architecture)](#1-ภาพรวมสถาปัตยกรรมระบบ)
+2. [สถานะฟีเจอร์ที่พัฒนาแล้ว (Completed Features 100%)](#2-สถานะฟีเจอร์ที่พัฒนาแล้ว)
+3. [ช่องว่างและระบบ CRUD ที่ต้องพัฒนาเพิ่ม (Identified Gaps & Missing CRUDs)](#3-ช่องว่างและระบบ-crud-ที่ต้องพัฒนาเพิ่ม)
+4. [ตารางแผนการดำเนินงาน 17 Phases (Implementation Roadmap)](#4-ตารางแผนการดำเนินงาน-17-phases)
+5. [รายละเอียดแผนงาน Phases 14 - 17 (Next Execution Steps)](#5-รายละเอียดแผนงาน-phases-14---17)
+6. [กฎเหล็กและกระบวนการตรวจสอบคุณภาพ (Quality Gate Protocol)](#6-กฎเหล็กและกระบวนการตรวจสอบคุณภาพ)
 
 ---
 
-## Missing Features (Not Implemented)
+## 1. ภาพรวมสถาปัตยกรรมระบบ
 
-### P1 — Leave Core
-1. **Multi-Level Approval Workflow** — `ApprovalWorkflow` and `WorkflowStep` models exist in schema but NO runtime logic processes them. Approval is currently single-step only (approve/reject by anyone with LEAVE_APPROVE permission)
-2. **Work Schedule System** — No model or logic for working days, working hours, shifts. `calculateLeaveDays()` hardcodes Saturday/Sunday as weekends
-3. **Leave Year Configuration** — No `LeaveYear` model. Leave balance uses `year` (integer) with no support for fiscal/custom leave years
-4. **Carry Forward** — `carriedForwardDays` field exists on `LeaveBalance` but no logic to calculate/expiry carry forward
-5. **Hourly Leave** — `allowHourly` exists on `LeaveType` but no `HourlyPeriod` enum or hourly calculation logic
-6. **Leave Balance Ledger Completeness** — `LeaveTransaction` missing `CARRY_FORWARD` and `EXPIRATION` types
-
-### P2 — Employee Management
-7. **Employee Import (CSV/Excel)** — No import functionality exists
-8. **Employee Lifecycle Management** — Status exists (ACTIVE/RESIGNED/TERMINATED) but no lifecycle automation (session revocation, line unlinking on resignation)
-9. **Employee Self-Service (Additional)** — No announcements view, holiday view, approval chain view, contact info, account status in LIFF
-
-### P3 — Notification & Communication
-10. **Notification Center** — In-app notifications exist but no UI to view/read them. No read/unread tracking. No `isRead` field on Notification model
-11. **Announcement System Improvements** — No `isPinned`, `read/unread tracking`, `attachment` support. No LIFF announcement view
-12. **Notification Provider Architecture** — Tightly coupled to LINE. No abstraction for future Email/SMS providers
-
-### P4 — Security & Auth
-13. **MFA/2FA (TOTP)** — Not implemented
-14. **Password Policy** — Minimum length validated (8 chars) but no complexity rules, no password history, no configurable policy
-15. **Session Management (User Self-Service)** — No UI for users to view/revoke their own sessions
-16. **Login History** — `LoginLog` model exists but not surfaced in any admin UI
-
-### P5 — SaaS & Subscription
-17. **Subscription Management** — `Plan` and `Subscription` models exist but `features/subscription/index.ts` is empty (`export {}`). No EntitlementService, no feature gating
-18. **Usage Tracking** — No tracking of employee count, storage usage, API usage
-19. **Tenant Onboarding Wizard** — No step-by-step onboarding flow
-
-### P6 — Reporting & Analytics
-20. **Advanced Reports** — Basic report exists but no department stats, monthly trends, annual summaries, average approval time
-21. **CSV Export** — Exists but limited. No multi-report export service
-
-### P7 — Backup & Recovery
-22. **Real Backup System** — Backup is simulated (random size/checksum). No actual pg_dump or S3 backup
-23. **Restore Strategy** — No restore functionality or documentation
-
-### P8 — Production Infrastructure
-24. **Dockerfile** — No Dockerfile exists
-25. **Docker Compose** — No docker-compose.yml exists
-26. **Background Job System** — Notifications are inline `await` calls, no queue/retry system
-27. **Webhook System** — Not implemented
-28. **Email Service** — Not implemented (only LINE)
-
-### P9 — UI/UX
-29. **Design System** — No centralized design tokens (colors hardcoded as `#533afd` in components)
-30. **Accessibility** — No ARIA labels, focus management, or keyboard navigation testing
-31. **Responsive Testing** — No systematic responsive breakpoints defined
+- **Framework**: Next.js 16 (App Router + Turbopack) + React 19 + TypeScript (Strict Mode)
+- **Database & ORM**: PostgreSQL + Prisma ORM v7 (`@prisma/adapter-pg`)
+- **Authentication**: Secure Server-side Session Cookies (`jose` Signed JWT, `HttpOnly`, `Secure`, `SameSite=Lax`)
+- **Password Security**: bcryptjs (10 salt rounds) + Brute-force Login Rate Limiting
+- **LINE Integration**: `@line/liff` SDK v2.30 (`scanCodeV2` + Web fallback) + LINE Messaging API (Flex Messages)
+- **Object Storage**: S3-Compatible Storage Abstraction (MinIO / Cloudflare R2 / AWS S3) with Pre-signed URLs
+- **UI & Styling**: Tailwind CSS v4 + shadcn/ui + Lucide Icons (Theme: `#0D9488` / `#533AFD`)
+- **Testing**: Vitest (22 test files, 189 tests passing 100%)
+- **Deployment**: Multi-stage Dockerfile (`node:22-alpine`, non-root user) + `docker-compose.yml`
 
 ---
 
-## Partial Features
+## 2. สถานะฟีเจอร์ที่พัฒนาแล้ว
 
-| Feature | Status | Gap |
-|---|---|---|
-| Approval Workflow | Models exist, runtime is single-step | Need multi-level orchestration engine |
-| Work Schedule | No model | Hardcoded weekend exclusion |
-| Hourly Leave | `allowHourly` flag exists | No calculation or UI support |
-| Carry Forward | `carriedForwardDays` field exists | No activation/expiry logic |
-| Subscription | Schema exists, module is empty | Full implementation needed |
-| Backup | UI exists, logic is simulated | Need real pg_dump + S3 backup |
-| Notification Center | DB model exists, no UI | No read/unread, no LIFF view |
-| Announcement Read | Model exists, no tracking | No `AnnouncementRead` relation |
-| Login History | Model exists, no UI | No admin page |
-| Employee Import | Permission exists | No import logic |
-| Session Management | System Admin has force-logout | No user self-service |
+### 🔹 พนักงาน (LINE LIFF Mobile App)
+- [x] เชื่อมต่อบัญชีครั้งแรก (First-time Linking): Company Code + Employee Code + DOB + PDPA Consent
+- [x] Employee Dashboard: บัตรสรุปยอดวันลาคงเหลือ, ปฏิทินวันลาและวันหยุด, ประกาศข่าวสาร
+- [x] ยื่นใบลา (Leave Form): ลาเต็มวัน, ครึ่งวัน (เช้า/บ่าย), รายชั่วโมง, แนบไฟล์หลักฐาน (PDF/PNG/JPG)
+- [x] Pre-submit Validation: ตรวจสอบโควตาวันลาคงเหลือ, ตรวจสอบการยื่นวันลาซ้อนทับ (Overlap Check)
+- [x] ประวัติการลา (Leave History): รายการใบลาพร้อม Badge สถานะ, กดยกเลิกคำขอที่รออนุมัติ
+- [x] โปรไฟล์พนักงาน (Profile View) และระบบแจ้งเตือน LINE Flex Message
 
----
+### 🔹 ผู้ดูแลระดับบริษัทและ HR (Company Admin & HR Web Portal)
+- [x] Admin Dashboard: Metrics สรุปพนักงาน, ใบลารออนุมัติ, พนักงานที่ลางานวันนี้, สถิติการลา
+- [x] Organization Management: แผนก (`Department`), ตำแหน่ง (`Position`), สาขา (`Branch`), พนักงาน (`Employee`)
+- [x] Employee CSV Import: นำเข้าพนักงานแบบกลุ่มพร้อมบันทึก `ImportLog`
+- [x] Work Schedule & Shifts: ตารางเวลาทำงานและกะการทำงาน (Shift) รองรับการคำนวณวันลาตามวันทำงานจริง
+- [x] Leave Types & Policies: กำหนดโควตาประจำปี, บังคับแนบเอกสาร, เงื่อนไขการลาล่วงหน้า
+- [x] Multi-Level Approval Engine: ระบบอนุมัติหลายระดับ (Workflow Steps) ตัดยอด Balance ผ่าน Database Transactions
+- [x] Calendar View & Holidays: ปฏิทินวันหยุดบริษัทและตารางวันลาของพนักงานทั้งหมด
+- [x] Announcements: ประกาศข่าวสารแบบระบุกลุ่มเป้าหมาย (รายสาขา/รายแผนก) พร้อมปักหมุด
+- [x] Reports & Export: รายงานสถิติการลาและส่งออก CSV (UTF-8 BOM ภาษาไทย)
 
-## Security Gaps
-
-1. **Rate Limiter is In-Memory** — `rate-limiter.ts` uses `Map`. Resets on server restart. Not shared across instances. Need Redis-based or DB-backed rate limiting for production
-2. **No CSRF Token on Server Actions** — Relies solely on SameSite=Lax cookies. Should add CSRF token for state-changing operations
-3. **No Request Body Size Limit** — Server Actions don't enforce payload size limits
-4. **No Input Sanitization on Rich Text** — Announcement content, leave reasons stored as-is. Consider HTML sanitization
-5. **Health Endpoint Exposes Internal Info** — No sensitive data currently, but no access control
-6. **API Key has No IP Restriction** — Schema lacks `allowedIps` field
-7. **No Brute-force on Employee Account Linking Beyond In-Memory** — Same rate limiter issue
-8. **Session has No Server-side Revocation** — JWT-only. If compromised, cannot revoke without wait for expiry. `UserSession` model exists but not used for JWT validation
-
----
-
-## Database Gaps
-
-### Missing Models
-- `WorkSchedule` — Employee/Department/Branch work schedule
-- `WorkScheduleEntry` — Daily time slots (e.g., Mon 08:30-17:30)
-- `LeaveYear` — Custom leave year configuration per company
-- `PasswordHistory` — Track used passwords for policy
-- `MfaSecret` — TOTP secrets for MFA users
-- `AnnouncementRead` — Track who read announcements
-- `WebhookConfig` — Webhook endpoint configuration
-- `WebhookDelivery` — Webhook delivery logs
-- `NotificationPreference` — User notification preferences
-- `ImportLog` — Employee import history
-
-### Missing Fields
-- `Notification.isRead` — Boolean for read/unread
-- `Notification.readAt` — DateTime when read
-- `Announcement.isPinned` — Boolean for pinned announcements
-- `ApiKey.allowedIps` — IP restriction for API keys
-- `ApiKey.rateLimit` — Per-key rate limit
-- `User.mfaEnabled` — MFA flag
-- `User.mfaSecret` — Encrypted TOTP secret
-- `Employee.photoUrl` — Employee photo (not just LINE avatar)
-
-### Missing Indexes
-- `LeaveRequest.[companyId, status]` — Composite for filtered queries
-- `LeaveRequest.[employeeId, status]` — Employee's pending requests
-- `Notification.[recipientId, isRead]` — Unread notifications
-- `Announcement.[companyId, isPublished, publishedAt]` — Active announcements
-
-### Missing Enums
-- `LeaveTransactionType` — Missing `CARRY_FORWARD`, `EXPIRATION`
-- `LeavePeriod` — Missing `HOURLY` for hourly leave
-- `NotificationChannel` — Missing `SMS`
+### 🔹 ผู้ดูแลระบบส่วนกลาง (System Admin Platform Portal)
+- [x] Overview Dashboard: สรุปภาพรวมจำนวน Tenants, Admins, Employees, Leave Requests
+- [x] Tenant Management: ดูรายชื่อบริษัท, สุ่มรหัส Tenant Code, สร้างบริษัทใหม่, เปิด/ระงับการใช้งาน (`ACTIVE`/`SUSPENDED`)
+- [x] User Management: ดูรายชื่อผู้ดูแลระบบทั้งหมดข้าม Tenant, รีเซ็ตรหัสผ่าน
+- [x] Global Employees View: ดูรายชื่อพนักงานทั้งหมดและสถานะ LINE
+- [x] Session Control: ดูรายการ Active Sessions และสั่ง Force Revoke จากส่วนกลาง
+- [x] Security Center: มอนิเตอร์ `SecurityEvent` และ Failed Logins
+- [x] API Keys Management: ออกและสั่งเพิกถอน API Keys (SHA-256 Hashed)
 
 ---
 
-## Architecture Gaps
+## 3. ช่องว่างและระบบ CRUD ที่ต้องพัฒนาเพิ่ม
 
-1. **Notification Service Not Decoupled** — `NotificationService` directly calls LINE functions. Should use Provider pattern (LINEProvider, EmailProvider, InAppProvider)
-2. **No Background Job Abstraction** — All work runs inline in HTTP requests. Need JobQueue abstraction for future Redis/BullMQ integration
-3. **No EntitlementService** — Subscription checks should be centralized, not scattered
-4. **Rate Limiter Not Persistent** — In-memory only. Need pluggable backend
-5. **No Middleware** — No Next.js middleware for route protection. Auth checks done in each page/action individually
-6. **Scattered ActionResult Type** — `ActionResult` interface duplicated in `features/leave/actions.ts`, `features/leave/approval-actions.ts`, `features/auth/actions.ts`
-7. **No API Route Versioning** — Single `/api/health` endpoint. No REST API for external integrations
-8. **No Error Boundary** — No global React Error Boundary for graceful error UI
+### ⚠️ 1. System Admin (Super Admin)
+1. **SaaS Plans & Subscription Management**:
+   - ยังไม่มีหน้า UI จัดการแพ็กเกจ SaaS (`/system-admin/plans`)
+   - ยังไม่มีหน้า UI จัดการรอบการสมัครของแต่ละบริษัท (`/system-admin/subscriptions`)
+   - ขาด `EntitlementService` เพื่อตรวจจับและบล็อกการสร้างพนักงานหรือแอดมินเกินโควตาของ Plan
+2. **Company CRUD Completion**:
+   - ขาด Modal แก้ไขข้อมูลบริษัท (`updateCompanySuperAdminAction`)
+   - ขาด Drawer ดูรายละเอียดเชิงลึกและสถิติราย Tenant
+   - ขาดปุ่มลบหรือจัดเก็บประวัติบริษัท (Archive/Delete)
+3. **Platform User CRUD**:
+   - ขาดปุ่มสร้าง Admin ใหม่จาก Super Admin
+   - ขาด Modal แก้ไขข้อมูลผู้ใช้และเปลี่ยนสังกัดบริษัท/Role/Status
+4. **Cross-Tenant Employees Management**:
+   - ขาดระบบ Search, Filter รายบริษัท, Pagination
+   - ขาด Action ปลดการผูก LINE (`Unlink LINE`) จากส่วนกลาง
+5. **Real Backup & Health**:
+   - Backup ยังเป็นการสุ่มข้อมูล Mock -> ต้องเปลี่ยนเป็นการ Dump Schema & Data จริง พร้อมปุ่มดาวน์โหลดไฟล์
+   - System Health Latency มีค่า Hardcoded -> ต้องเปลี่ยนเป็น Real Ping ไปยัง S3, LINE API, และ Memory/Load จริงของ Server
+6. **Security IP Blocklist**:
+   - ขาดระบบบล็อก/ปลดบล็อก IP Address ที่พยายามโจมตี Brute Force
 
----
-
-## Technical Debt
-
-1. `any` types in `messaging.ts` (`messages: any[]`), `notification/service.ts` (`payload: flexMessage as any`)
-2. `console.warn`/`console.error` used instead of structured logger
-3. No consistent `ActionResult` shared type (duplicated 3 times)
-4. `features/subscription/index.ts` is empty placeholder
-5. `prisma/seed.ts` exists but not audited for completeness
-6. No `.dockerignore` file
-7. No `middleware.ts` for auth guard
-
----
-
-## Testing Gaps
-
-### Existing Tests (16 files)
-- `auth.test.ts`, `account-linking.test.ts`, `admin-approval.test.ts`
-- `concurrency-ledger.test.ts`, `e2e-workflow.test.ts`, `leave-workflow.test.ts`
-- `notification.test.ts`, `password-management.test.ts`, `reports-and-audit.test.ts`
-- `schema.test.ts`, `security-and-pdpa.test.ts`, `storage.test.ts`
-- `tenant-isolation.test.ts`, `foundation.test.ts`, `company-registration.test.ts`
-- `admin-enterprise.test.ts`
-
-### Missing Tests
-- No integration tests (only unit tests in `tests/unit/`)
-- No E2E tests with Playwright
-- No load/concurrency tests
-- No approval workflow multi-level tests
-- No work schedule calculation tests
-- No carry forward tests
-- No hourly leave tests
-- No notification provider tests
-- No API key security tests
-- No file upload attack tests (path traversal, magic bytes)
+### ⚠️ 2. Company Admin & HR
+1. **HR Proxy Leave Actions**:
+   - HR ยังไม่สามารถยื่นใบลาแทนพนักงานกรณีฉุกเฉินได้ (`createLeaveRequestByHrAction`)
+   - ยังไม่มีปุ่มเพิกถอนใบลาที่อนุมัติไปแล้ว (`revokeApprovedLeaveAction`) พร้อมคืนยอด Balance ใน Ledger (`REVERSAL`)
+2. **Holiday Management**:
+   - ขาดปุ่มนำเข้าวันหยุดนักขัตฤกษ์ไทยประจำปีอัตโนมัติ (Import Thai Public Holidays)
+3. **Leave Balance Batch Operations**:
+   - ขาดระบบปรับปรุงยอดวันลาแบบกลุ่มรายแผนก (Batch Adjustment)
 
 ---
 
-## Production Gaps
+## 4. ตารางแผนการดำเนินงาน 17 Phases
 
-1. **No Dockerfile** — Multi-stage build needed
-2. **No docker-compose.yml** — For local dev with PostgreSQL + MinIO
-3. **No .dockerignore** — Prevent node_modules in image
-4. **No nginx/reverse proxy config** — For production HTTPS
-5. **No Database Migration Strategy** — Need `prisma migrate deploy` in startup script
-6. **No Real Backup** — Need pg_dump + S3 backup script
-7. **No Monitoring beyond /api/health** — Need proper logging (Pino/Winston)
-8. **No Structured Error Logging** — Console only
-9. **No CI/CD Pipeline** — No GitHub Actions or similar
-10. **No Environment Variable Validation** — No startup validation of required env vars
-
----
-
-## Proposed Architecture (Changes Needed)
-
-### Must Change
-1. **Shared `ActionResult` type** — Move to `src/lib/types.ts`
-2. **Notification Provider Pattern** — `NotificationService` → `NotificationDispatcher` with LINE/InApp/Email providers
-3. **Work Schedule Model** — New DB models + calculation integration
-4. **Multi-Level Approval Engine** — Runtime engine using existing `ApprovalWorkflow`/`WorkflowStep` models
-5. **Background Job Abstraction** — `JobQueue` interface with InMemory implementation (Redis-ready)
-
-### Should Change
-6. **Rate Limiter Backend** — Add DB-backed option alongside in-memory
-7. **Session Validation** — Check `UserSession.isRevoked` during JWT verification
-8. **Middleware** — Add `middleware.ts` for route-level auth protection
-
-### Nice to Have
-9. **Structured Logger** — Replace console with Pino
-10. **Global Error Boundary** — React Error Boundary component
+| Phase | หัวข้อการดำเนินงาน | สถานะ | รายละเอียด |
+| :---: | :--- | :---: | :--- |
+| **Phase 1** | Project Foundation & Infrastructure | ✅ **Done** | Next.js 16, Tailwind CSS v4, shadcn/ui, Project Structure |
+| **Phase 2** | Database Schema, Migration & Seeding | ✅ **Done** | PostgreSQL + Prisma 7 (17+ Models), Seeds |
+| **Phase 3** | Authentication & Central RBAC Engine | ✅ **Done** | Server-side Sessions, bcryptjs, Central RBAC Matrix |
+| **Phase 4** | Multi-Tenant Security & Isolation Engine | ✅ **Done** | Server-side Tenant Context Resolver, Scoped DAL |
+| **Phase 5** | LINE LIFF Foundation & Account Linking | ✅ **Done** | LIFF SDK v2.30, `scanCodeV2`, Anti-Enumeration |
+| **Phase 6** | Employee LIFF System & Leave Workflow | ✅ **Done** | Dashboard, Leave Form, Overlap Check, Profile, History |
+| **Phase 7** | Admin Web Portal & Approval System | ✅ **Done** | Admin Dashboard, Org Structure, Multi-Level Approval |
+| **Phase 8** | S3-Compatible Object Storage Subsystem | ✅ **Done** | Storage Abstraction, Magic Bytes Check, Pre-signed URLs |
+| **Phase 9** | LINE Messaging Notification Engine | ✅ **Done** | Decoupled Notification Dispatcher, LINE Flex Templates |
+| **Phase 10** | Reports, Analytics & Audit Logging | ✅ **Done** | Leave Reports, Thai CSV Export, Sanitized Audit Trail |
+| **Phase 11** | Security Hardening, PDPA & Privacy | ✅ **Done** | Security Headers, CSP, PII Anonymization, Rate Limiter |
+| **Phase 12** | Comprehensive Automated Testing Suite | ✅ **Done** | 22 Test Files / 189 Tests Passed 100% |
+| **Phase 13** | Production Readiness, Docker & Deployment | ✅ **Done** | Multi-stage Dockerfile, docker-compose, Health Check, Docs |
+| **Phase 14** | **System Admin Enterprise CRUDs & Subscriptions** | ⏳ **Next** | Plans CRUD, Subscriptions CRUD, Entitlement Guard, Company/User Edit, Super Admin Employee Actions |
+| **Phase 15** | **System Admin Operations, Real Health & Security** | ⏳ **Next** | Real Database Snapshot Backup & Download, Real Health Checks (S3/LINE/Memory), IP Blocklist |
+| **Phase 16** | **Company Admin & HR CRUD Enhancements** | ⏳ **Next** | HR Proxy Leave Submission & Revocation, Holiday Auto-Import, Batch Balance Adjustment |
+| **Phase 17** | **Comprehensive Testing & Final Quality Gate** | ⏳ **Next** | Automated Test Suites for New CRUDs, 100% Quality Gate |
 
 ---
 
-## Implementation Phases
+## 5. รายละเอียดแผนงาน Phases 14 - 17
 
-> **Status legend**: ✅ Done · 🔶 Partial · ❌ Not started
-> *Last updated: 2026-08-19*
+### 📌 Phase 14: System Admin Enterprise CRUDs & Subscriptions
+- **14.1 SaaS Plans & Pricing Management (`/system-admin/plans`)**:
+  - สร้าง Server Actions: `createPlanAction`, `updatePlanAction`, `deletePlanAction`, `togglePlanActiveAction`
+  - สร้างหน้า UI `/system-admin/plans` พร้อม Modal สร้าง/แก้ไข Plan (โควตา `maxEmployees`, `maxAdmins`, ราคา, Feature Flags)
+- **14.2 Tenant Subscriptions & Entitlements Engine (`/system-admin/subscriptions`)**:
+  - สร้าง Server Actions: `assignCompanyPlanAction`, `updateSubscriptionStatusAction`, `extendTrialAction`, `cancelSubscriptionAction`
+  - สร้างหน้า UI `/system-admin/subscriptions` สำหรับดูและปรับสถานะรอบบิล
+  - พัฒนา `EntitlementService` (`src/lib/subscription/entitlement.ts`) บังคับใช้โควตาตาม Plan
+- **14.3 Full Tenant Company CRUD & Details View (`/system-admin/companies`)**:
+  - เพิ่ม `updateCompanySuperAdminAction`, `deleteCompanySuperAdminAction`, `getCompanyDetailAction`
+  - เพิ่ม Modal แก้ไขข้อมูลบริษัท และ Drawer ดูรายละเอียดเชิงลึกราย Tenant
+- **14.4 Platform User & Admin CRUD (`/system-admin/users`)**:
+  - เพิ่ม `createUserSuperAdminAction`, `updateUserSuperAdminAction`, `deleteUserSuperAdminAction`, `toggleUserStatusSuperAdminAction`
+  - เพิ่ม Modal สร้าง Admin ใหม่ และ Modal แก้ไขข้อมูล/สิทธิ์
+- **14.5 Cross-Tenant Employee Management (`/system-admin/employees`)**:
+  - เพิ่มระบบ Search, Filter รายบริษัท, Pagination และปุ่มสั่ง Unlink LINE จากส่วนกลาง
 
-| Phase | Focus | Dependencies | Complexity | Status |
-|---|---|---|---|---|
-| **PHASE 0** | Audit & Plan | None | ✅ Done | ✅ |
-| **PHASE 1** | Database & Architecture Foundation | PHASE 0 | Medium | ✅ `phase1_foundation`, shared `ActionResult`, `middleware` |
-| **PHASE 2** | Leave Calculation Engine | PHASE 1 | Medium | ✅ `calculator.ts`, half-day/workday calc, 15 tests |
-| **PHASE 3** | Leave Year + Balance + Carry Forward | PHASE 1, 2 | High | ✅ `LeaveYear`, carry-forward job + ledger, 16 tests |
-| **PHASE 4** | Work Schedule + Shift | PHASE 1 | High | ✅ `Shift`/`WorkSchedule` models, 9 tests |
-| **PHASE 5** | Approval Workflow (Multi-Level) | PHASE 1, 2 | High | ✅ `approval-engine.ts` + runtime, 13 tests |
-| **PHASE 6** | Employee Lifecycle + Import | PHASE 1 | Medium | ✅ CSV import + `ImportLog`, session revocation, LINE unlinking, 17 tests |
-| **PHASE 7** | Notification Center + Announcement | PHASE 1 | Medium | 🔶 Provider pattern done (`Line/InApp/Email`); `isPinned`, `isRead`/`readAt` in schema. **Missing**: notification center UI, LIFF announcement view, `AnnouncementRead`, real email delivery (placeholder) |
-| **PHASE 8** | MFA + Session Security | PHASE 1 | Medium | 🔶 Session revocation on employee deactivation done. **Missing**: TOTP MFA, password-history enforcement (`PasswordHistory` model exists, unused), user self-service session list, login-history UI |
-| **PHASE 9** | SaaS Plan + Subscription + Usage | PHASE 1 | High | ❌ `Plan`/`Subscription` models exist but `features/subscription` is empty; no `EntitlementService`, no usage tracking |
-| **PHASE 10** | Tenant Onboarding Wizard | PHASE 1, 9 | Medium | ❌ No step-by-step onboarding flow |
-| **PHASE 11** | Analytics + Reporting | PHASE 1, 2, 3 | Medium | 🔶 Summary report (dept/type stats) + CSV export done. **Missing**: monthly trends, annual summaries, avg approval time |
-| **PHASE 12** | Backup + Restore | PHASE 1 | Medium | 🔶 UI + simulated logic only. **Missing**: real pg_dump, S3 backup, restore |
-| **PHASE 13** | Security Center + API Keys + Webhook | PHASE 1 | Medium | 🔶 Security center + API key CRUD done. **Missing**: webhook system (no `WebhookConfig`/`WebhookDelivery`) |
-| **PHASE 14** | Performance + Accessibility + UI Polish | All | Medium | 🔶 Middleware route guard + sidebar/UI polish done. **Missing**: centralized design tokens, ARIA/accessibility, responsive testing |
-| **PHASE 15** | Complete Testing | All | High | 🔶 21 files / 181 tests (was 16 files). **Missing**: integration, E2E (Playwright), load/concurrency, upload attack tests |
-| **PHASE 16** | Production Hardening (Docker, CI/CD) | All | Medium | ❌ No Dockerfile, docker-compose, `.dockerignore`, CI/CD, structured logging, real backup |
+### 📌 Phase 15: System Admin Operations, Real Health & Security
+- **15.1 Real Database Snapshot Backup & Download Stream (`/system-admin/backup`)**:
+  - เปลี่ยนจากการจำลอง Mock Size/Checksum เป็นการ Export Snapshot ข้อมูลจริง
+  - เพิ่ม Endpoint `/api/system-admin/backup/[id]/download` และปุ่มดาวน์โหลดไฟล์ `.json.gz`
+- **15.2 Real Infrastructure Health Checks & Metrics (`/system-admin/health`)**:
+  - ทำ Real Ping ไปยัง S3 Bucket, LINE API, และ Database Pool
+  - แสดง Memory Usage (`process.memoryUsage()`) และ Uptime จริงของระบบ
+- **15.3 Security Center IP Blocklist & Live Rate Limiting (`/system-admin/security`)**:
+  - เพิ่ม Server Actions บล็อก/ปลดบล็อก IP Address
+  - ดึงสถิติ Rate Limit Blocks จากตาราง `RateLimitEntry` จริง
+
+### 📌 Phase 16: Company Admin & HR CRUD Enhancements
+- **16.1 HR Proxy Leave Request Submission & Revocation (`/admin/leave-requests`)**:
+  - พัฒนา `createLeaveRequestByHrAction` ให้ HR ยื่นใบลาแทนพนักงาน
+  - พัฒนา `revokeApprovedLeaveAction` ยกเลิกใบลาที่อนุมัติแล้วพร้อมคืนยอด Balance (`REVERSAL`) และแจ้งเตือน LINE
+- **16.2 Holiday Bulk Import & Annual Calendar Automation (`/admin/holidays`)**:
+  - พัฒนา `importOfficialHolidaysAction` ดึงวันหยุดนักขัตฤกษ์ไทยประจำปีเข้าปฏิทินบริษัทอัตโนมัติ
+- **16.3 Batch Leave Balance Adjustment (`/admin/leave-balance`)**:
+  - พัฒนา `batchAdjustLeaveBalanceAction` ปรับปรุงยอดวันลาแบบกลุ่มรายแผนก
+
+### 📌 Phase 17: Comprehensive Automated Testing & Quality Gate
+- **17.1 Automated Unit & Integration Tests**:
+  - `tests/unit/super-admin-crud.test.ts` (Plan, Subscription, Company Edit, User CRUD)
+  - `tests/unit/subscription-entitlement.test.ts` (Entitlement limits enforcement)
+  - `tests/unit/hr-proxy-leave.test.ts` (Proxy leave & Approval revocation)
+  - `tests/unit/real-health-backup.test.ts` (Backup generation & Health checks)
+- **17.2 Final Quality Gate Protocol**:
+  - `npm run lint` -> PASS
+  - `npm run type-check` -> PASS
+  - `npm run test` -> All Tests PASS
+  - `npm run prisma:validate` -> PASS
+  - `npx next build` -> PASS
 
 ---
 
-## Dependencies
+## 6. กฎเหล็กและกระบวนการตรวจสอบคุณภาพ
 
-```
-PHASE 1 ──┬──> PHASE 2 ──> PHASE 3
-           ├──> PHASE 4
-           ├──> PHASE 5 (also needs PHASE 2)
-           ├──> PHASE 6
-           ├──> PHASE 7
-           ├──> PHASE 8
-           ├──> PHASE 9 ──> PHASE 10
-           ├──> PHASE 11 (also needs PHASE 2, 3)
-           ├──> PHASE 12
-           └──> PHASE 13
-PHASE 14 ── requires all above
-PHASE 15 ── requires all above
-PHASE 16 ── requires all above
+```text
+1. FORMAT      : npx prettier --write .
+2. LINT        : npm run lint
+3. TYPE CHECK  : npm run type-check
+4. TEST        : npm run test
+5. PRISMA      : npm run prisma:validate
+6. BUILD       : npx next build
 ```
 
----
-
-## Risks
-
-| Risk | Impact | Mitigation |
-|---|---|---|
-| Work Schedule complexity | High — affects leave calculation, approval, UI | Design incrementally. Start with simple working days, add shifts later |
-| Multi-Level Approval Race Condition | High — concurrent approvals could cause double-processing | Use DB transactions + row-level locking. Lock `LeaveRequest` row before processing |
-| Carry Forward Edge Cases | Medium — year boundary, policy conflicts | Thorough unit tests. Run carry forward as scheduled job, not inline |
-| Subscription Entitlement Bloat | Medium — checking entitlements everywhere | Centralize in `EntitlementService`. Cache entitlement results |
-| Real Backup Complexity | Medium — pg_dump + S3 coordination | Start with simple pg_dump script. Add S3 sync in Phase 12 |
-| Breaking Existing Features | High — refactoring may break 16 test files | Run full test suite after every change. Maintain backward compatibility |
-
----
-
-## Migration Strategy
-
-1. All schema changes via `prisma migrate dev` (never manual)
-2. New models added without removing existing ones (backward compatible)
-3. Feature flags for new functionality (toggle via `SystemSetting`)
-4. Existing tests must pass before and after each phase
-5. Rollback plan: Revert migration + code for each phase
-
----
-
-> **END OF PHASE 0 — Audit Complete**
-> Awaiting user command to proceed with PHASE 1.
+> **เกณฑ์การผ่านงาน**: ทุกขั้นตอนต้องได้ผลลัพธ์ **PASS 100%** โดยไม่มี Error หรือ Security Bypass ใดๆ
