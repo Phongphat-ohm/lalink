@@ -32,6 +32,8 @@ import {
   updateCompanySuperAdminAction,
   deleteCompanySuperAdminAction,
   getCompanyDetailAction,
+  toggleCompanyFeatureAction,
+  toggleGlobalLinePushAction,
 } from "@/features/company";
 import {
   Building2,
@@ -48,6 +50,11 @@ import {
   Trash2,
   Eye,
   CreditCard,
+  MessageSquare,
+  Key,
+  Webhook,
+  Power,
+  ShieldCheck,
 } from "lucide-react";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import { toast } from "@/components/ui/toast";
@@ -59,6 +66,9 @@ export interface SerializedCompany {
   contactEmail: string | null;
   contactPhone: string | null;
   status: "ACTIVE" | "SUSPENDED";
+  enableLinePush: boolean;
+  enableApi: boolean;
+  enableWebhook: boolean;
   createdAt: string;
   employeesCount: number;
   usersCount: number;
@@ -67,18 +77,34 @@ export interface SerializedCompany {
 
 interface CompanyManagementTableProps {
   initialCompanies: SerializedCompany[];
+  initialGlobalLinePush?: boolean;
 }
 
 export function CompanyManagementTable({
   initialCompanies,
+  initialGlobalLinePush = true,
 }: CompanyManagementTableProps) {
   const router = useRouter();
+  const [companies, setCompanies] = React.useState(initialCompanies);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<
     "ALL" | "ACTIVE" | "SUSPENDED"
   >("ALL");
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
+
+  // Global Settings State
+  const [globalLinePush, setGlobalLinePush] = React.useState(initialGlobalLinePush);
+  const [isTogglingGlobalLinePush, setIsTogglingGlobalLinePush] = React.useState(false);
+  const [togglingFeatureKey, setTogglingFeatureKey] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setCompanies(initialCompanies);
+  }, [initialCompanies]);
+
+  React.useEffect(() => {
+    setGlobalLinePush(initialGlobalLinePush);
+  }, [initialGlobalLinePush]);
 
   // 1. Create Company Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
@@ -94,6 +120,9 @@ export function CompanyManagementTable({
   const [editEmail, setEditEmail] = React.useState("");
   const [editPhone, setEditPhone] = React.useState("");
   const [editAddress, setEditAddress] = React.useState("");
+  const [editEnableLinePush, setEditEnableLinePush] = React.useState(true);
+  const [editEnableApi, setEditEnableApi] = React.useState(false);
+  const [editEnableWebhook, setEditEnableWebhook] = React.useState(false);
   const [isUpdating, setIsUpdating] = React.useState(false);
   const [editError, setEditError] = React.useState<string | null>(null);
 
@@ -131,6 +160,9 @@ export function CompanyManagementTable({
     setEditPhone(c.contactPhone || "");
     setEditTaxId("");
     setEditAddress("");
+    setEditEnableLinePush(c.enableLinePush);
+    setEditEnableApi(c.enableApi);
+    setEditEnableWebhook(c.enableWebhook);
     setEditError(null);
   }
 
@@ -176,15 +208,62 @@ export function CompanyManagementTable({
     formData.append("email", editEmail);
     formData.append("phone", editPhone);
     formData.append("address", editAddress);
+    formData.append("enableLinePush", String(editEnableLinePush));
+    formData.append("enableApi", String(editEnableApi));
+    formData.append("enableWebhook", String(editEnableWebhook));
 
     const result = await updateCompanySuperAdminAction(editingCompany.id, formData);
     setIsUpdating(false);
 
     if (result.success) {
       setEditingCompany(null);
+      toast.success("อัปเดตข้อมูลบริษัทสำเร็จ");
       router.refresh();
     } else {
       setEditError(result.message || "เกิดข้อผิดพลาดในการอัปเดตข้อมูล");
+    }
+  }
+
+  async function handleToggleFeature(
+    companyId: string,
+    feature: "enableLinePush" | "enableApi" | "enableWebhook",
+    newValue: boolean,
+  ) {
+    const key = `${companyId}-${feature}`;
+    setTogglingFeatureKey(key);
+
+    // Optimistic UI update
+    setCompanies((prev) =>
+      prev.map((c) => (c.id === companyId ? { ...c, [feature]: newValue } : c)),
+    );
+
+    const res = await toggleCompanyFeatureAction(companyId, feature, newValue);
+    setTogglingFeatureKey(null);
+
+    if (res.success) {
+      toast.success(res.message || "อัปเดตการตั้งค่าสำเร็จ");
+      router.refresh();
+    } else {
+      // Revert on error
+      setCompanies((prev) =>
+        prev.map((c) => (c.id === companyId ? { ...c, [feature]: !newValue } : c)),
+      );
+      toast.error(res.message || "เกิดข้อผิดพลาด");
+    }
+  }
+
+  async function handleToggleGlobalLinePush() {
+    const nextVal = !globalLinePush;
+    setIsTogglingGlobalLinePush(true);
+    const res = await toggleGlobalLinePushAction(nextVal);
+    setIsTogglingGlobalLinePush(false);
+
+    if (res.success) {
+      setGlobalLinePush(nextVal);
+      toast.success(res.message || "อัปเดต Global LINE Push สำเร็จ");
+      router.refresh();
+    } else {
+      toast.error(res.message || "เกิดข้อผิดพลาด");
     }
   }
 
@@ -217,7 +296,7 @@ export function CompanyManagementTable({
     }
   }
 
-  const filteredCompanies = initialCompanies.filter((c) => {
+  const filteredCompanies = companies.filter((c) => {
     const matchesSearch =
       c.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       c.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -244,17 +323,68 @@ export function CompanyManagementTable({
             จัดการบริษัทและ Tenant ในระบบ
           </h1>
           <p className="text-xs text-[#64748d] mt-0.5">
-            ควบคุมสถานะการเปิดใช้งาน แก้ไขข้อมูลองค์กร และตรวจสอบรายละเอียดเชิงลึก
+            ควบคุมสถานะการเปิดใช้งาน สิทธิ์การใช้งาน API, Webhook, LINE Push และตรวจสอบรายละเอียดเชิงลึก
           </p>
         </div>
 
         <Button
           onClick={handleOpenCreateModal}
-          className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white px-4 h-10 text-xs font-semibold shadow-sm"
+          className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white px-4 h-10 text-xs font-semibold shadow-sm cursor-pointer"
         >
           <Plus className="h-4 w-4 mr-1.5" /> เพิ่มบริษัทใหม่
         </Button>
       </div>
+
+      {/* Global System Settings Card */}
+      <Card className="border-[#e3e8ee] bg-gradient-to-r from-emerald-50/50 via-white to-blue-50/30 shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl p-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+          <div className="flex items-start sm:items-center gap-3">
+            <div
+              className={`p-2.5 rounded-xl ${
+                globalLinePush
+                  ? "bg-emerald-100 text-emerald-700"
+                  : "bg-rose-100 text-rose-700"
+              }`}
+            >
+              <MessageSquare className="h-5 w-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-bold text-[#0d253d]">
+                  ระบบส่งข้อความแจ้งเตือนผ่าน LINE ทั่วระบบ (Global LINE Push)
+                </h2>
+                <Badge
+                  variant={globalLinePush ? "success" : "destructive"}
+                  className="text-[10px] rounded-full px-2.5 py-0.5 font-semibold"
+                >
+                  {globalLinePush ? "เปิดใช้งานทั่วระบบ" : "ปิดการส่งข้อความชั่วคราว"}
+                </Badge>
+              </div>
+              <p className="text-xs text-[#64748d] mt-0.5">
+                เมื่อเปิดใช้งาน ระบบจะอนุญาตให้ส่ง Flex Message แจ้งเตือนการยื่นใบลาและการอนุมัติไปยัง LINE ของพนักงาน (ขึ้นอยู่กับการเปิดสิทธิ์รายบริษัท)
+              </p>
+            </div>
+          </div>
+          <Button
+            variant={globalLinePush ? "destructive" : "default"}
+            size="sm"
+            disabled={isTogglingGlobalLinePush}
+            onClick={handleToggleGlobalLinePush}
+            className={`rounded-full h-8 text-xs font-semibold px-4 cursor-pointer shrink-0 ${
+              !globalLinePush
+                ? "bg-emerald-600 hover:bg-emerald-700 text-white"
+                : ""
+            }`}
+          >
+            {isTogglingGlobalLinePush ? (
+              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            ) : (
+              <Power className="h-3.5 w-3.5 mr-1.5" />
+            )}
+            {globalLinePush ? "ปิดการส่ง LINE Push ทั่วระบบ" : "เปิดใช้งาน LINE Push ทั่วระบบ"}
+          </Button>
+        </div>
+      </Card>
 
       {/* Filter and Search Card */}
       <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl">
@@ -304,6 +434,7 @@ export function CompanyManagementTable({
                   <th className="py-3.5 px-4 font-semibold">ชื่อบริษัท</th>
                   <th className="py-3.5 px-4 font-semibold">ข้อมูลติดต่อ</th>
                   <th className="py-3.5 px-4 font-semibold">สถานะ</th>
+                  <th className="py-3.5 px-4 font-semibold">ฟังก์ชัน & สิทธิ์</th>
                   <th className="py-3.5 px-4 font-semibold">พนักงาน</th>
                   <th className="py-3.5 px-4 font-semibold">ใบลาทั้งหมด</th>
                   <th className="py-3.5 px-4 font-semibold">สร้างเมื่อ</th>
@@ -313,7 +444,7 @@ export function CompanyManagementTable({
               <tbody className="divide-y divide-[#e3e8ee]/70">
                 {paginatedCompanies.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="py-12 text-center text-[#64748d]">
+                    <td colSpan={9} className="py-12 text-center text-[#64748d]">
                       ไม่พบข้อมูลบริษัทตามเงื่อนไขที่ระบุ
                     </td>
                   </tr>
@@ -340,6 +471,87 @@ export function CompanyManagementTable({
                           {c.status === "ACTIVE" ? "เปิดใช้งาน" : "ระงับการใช้งาน"}
                         </Badge>
                       </td>
+                      {/* Features Column */}
+                      <td className="py-3.5 px-4">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          {/* LINE Push Toggle */}
+                          <button
+                            type="button"
+                            disabled={togglingFeatureKey === `${c.id}-enableLinePush`}
+                            onClick={() =>
+                              handleToggleFeature(
+                                c.id,
+                                "enableLinePush",
+                                !c.enableLinePush,
+                              )
+                            }
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all cursor-pointer ${
+                              c.enableLinePush
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                                : "bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200 opacity-70"
+                            }`}
+                            title={
+                              c.enableLinePush
+                                ? "คลิกเพื่อปิด LINE Push"
+                                : "คลิกเพื่อเปิด LINE Push"
+                            }
+                          >
+                            <MessageSquare className="h-3 w-3" />
+                            <span>LINE</span>
+                            {c.enableLinePush ? "✓" : "✗"}
+                          </button>
+
+                          {/* API Access Toggle */}
+                          <button
+                            type="button"
+                            disabled={togglingFeatureKey === `${c.id}-enableApi`}
+                            onClick={() =>
+                              handleToggleFeature(c.id, "enableApi", !c.enableApi)
+                            }
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all cursor-pointer ${
+                              c.enableApi
+                                ? "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+                                : "bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200 opacity-70"
+                            }`}
+                            title={
+                              c.enableApi
+                                ? "คลิกเพื่อปิด REST API"
+                                : "คลิกเพื่อเปิด REST API"
+                            }
+                          >
+                            <Key className="h-3 w-3" />
+                            <span>API</span>
+                            {c.enableApi ? "✓" : "✗"}
+                          </button>
+
+                          {/* Webhook Access Toggle */}
+                          <button
+                            type="button"
+                            disabled={togglingFeatureKey === `${c.id}-enableWebhook`}
+                            onClick={() =>
+                              handleToggleFeature(
+                                c.id,
+                                "enableWebhook",
+                                !c.enableWebhook,
+                              )
+                            }
+                            className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-all cursor-pointer ${
+                              c.enableWebhook
+                                ? "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100"
+                                : "bg-slate-100 text-slate-400 border-slate-200 hover:bg-slate-200 opacity-70"
+                            }`}
+                            title={
+                              c.enableWebhook
+                                ? "คลิกเพื่อปิด Webhooks"
+                                : "คลิกเพื่อเปิด Webhooks"
+                            }
+                          >
+                            <Webhook className="h-3 w-3" />
+                            <span>Webhook</span>
+                            {c.enableWebhook ? "✓" : "✗"}
+                          </button>
+                        </div>
+                      </td>
                       <td className="py-3.5 px-4 font-semibold text-[#0d253d] tabular-nums font-mono">
                         {c.employeesCount} คน
                       </td>
@@ -356,7 +568,7 @@ export function CompanyManagementTable({
                             variant="outline"
                             size="sm"
                             onClick={() => handleOpenDetail(c.id)}
-                            className="h-7 text-xs rounded-full px-2 text-[#0d253d] border-[#e3e8ee] hover:bg-[#f6f9fc]"
+                            className="h-7 text-xs rounded-full px-2 text-[#0d253d] border-[#e3e8ee] hover:bg-[#f6f9fc] cursor-pointer"
                             title="ดูรายละเอียด"
                           >
                             <Eye className="h-3.5 w-3.5" />
@@ -367,7 +579,7 @@ export function CompanyManagementTable({
                             variant="outline"
                             size="sm"
                             onClick={() => handleOpenEditModal(c)}
-                            className="h-7 text-xs rounded-full px-2 text-[#533afd] border-[#e3e8ee] hover:bg-[#533afd]/10"
+                            className="h-7 text-xs rounded-full px-2 text-[#533afd] border-[#e3e8ee] hover:bg-[#533afd]/10 cursor-pointer"
                             title="แก้ไขข้อมูล"
                           >
                             <Pencil className="h-3.5 w-3.5" />
@@ -619,20 +831,78 @@ export function CompanyManagementTable({
               />
             </div>
 
+            {/* Feature Flags Section */}
+            <div className="rounded-xl border border-[#e3e8ee] p-3.5 bg-[#f6f9fc] space-y-2.5">
+              <label className="text-xs font-bold text-[#0d253d] flex items-center gap-1.5">
+                <ShieldCheck className="h-4 w-4 text-[#533afd]" />
+                สิทธิ์และฟังก์ชันการใช้งาน (Tenant Capabilities)
+              </label>
+
+              <div className="space-y-2">
+                <label className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-[#e3e8ee] text-xs cursor-pointer hover:bg-slate-50">
+                  <div className="flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4 text-emerald-600 shrink-0" />
+                    <div>
+                      <p className="font-semibold text-[#0d253d]">LINE Push Message</p>
+                      <p className="text-[10px] text-[#64748d]">อนุญาตให้ระบบส่งแจ้งเตือนการลาไปยัง LINE ของพนักงาน</p>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={editEnableLinePush}
+                    onChange={(e) => setEditEnableLinePush(e.target.checked)}
+                    className="h-4 w-4 rounded text-[#533afd] focus:ring-[#533afd] cursor-pointer"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-[#e3e8ee] text-xs cursor-pointer hover:bg-slate-50">
+                  <div className="flex items-center gap-2">
+                    <Key className="h-4 w-4 text-indigo-600 shrink-0" />
+                    <div>
+                      <p className="font-semibold text-[#0d253d]">REST API Access</p>
+                      <p className="text-[10px] text-[#64748d]">อนุญาตให้สร้าง API Key และเชื่อมต่อระบบภายนอกผ่าน REST API</p>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={editEnableApi}
+                    onChange={(e) => setEditEnableApi(e.target.checked)}
+                    className="h-4 w-4 rounded text-[#533afd] focus:ring-[#533afd] cursor-pointer"
+                  />
+                </label>
+
+                <label className="flex items-center justify-between p-2.5 rounded-lg bg-white border border-[#e3e8ee] text-xs cursor-pointer hover:bg-slate-50">
+                  <div className="flex items-center gap-2">
+                    <Webhook className="h-4 w-4 text-purple-600 shrink-0" />
+                    <div>
+                      <p className="font-semibold text-[#0d253d]">Webhook Subscription</p>
+                      <p className="text-[10px] text-[#64748d]">อนุญาตให้ลงทะเบียนรับเหตุการณ์ Webhook แบบ Real-time</p>
+                    </div>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={editEnableWebhook}
+                    onChange={(e) => setEditEnableWebhook(e.target.checked)}
+                    className="h-4 w-4 rounded text-[#533afd] focus:ring-[#533afd] cursor-pointer"
+                  />
+                </label>
+              </div>
+            </div>
+
             <DialogFooter className="mt-5 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setEditingCompany(null)}
                 disabled={isUpdating}
-                className="rounded-full text-xs h-9 px-4"
+                className="rounded-full text-xs h-9 px-4 cursor-pointer"
               >
                 ยกเลิก
               </Button>
               <Button
                 type="submit"
                 disabled={isUpdating}
-                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] text-xs h-9 px-5 font-semibold"
+                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] text-xs h-9 px-5 font-semibold cursor-pointer"
               >
                 {isUpdating ? "กำลังบันทึก..." : "บันทึกการแก้ไข"}
               </Button>
@@ -690,6 +960,25 @@ export function CompanyManagementTable({
                   <p className="text-lg font-bold font-mono text-[#059669] mt-0.5">
                     {detailCompany.leaveRequestsCount} รายการ
                   </p>
+                </div>
+              </div>
+
+              {/* Feature Capabilities */}
+              <div className="p-3 rounded-xl bg-white border border-[#e3e8ee] space-y-2">
+                <span className="font-semibold text-[#0d253d] text-xs">ฟังก์ชันและสิทธิ์การใช้งาน (Capabilities):</span>
+                <div className="flex flex-wrap gap-2">
+                  <Badge variant={detailCompany.enableLinePush ? "success" : "outline"} className="text-[11px] rounded-full">
+                    <MessageSquare className="h-3 w-3 mr-1" />
+                    LINE Push: {detailCompany.enableLinePush ? "เปิดใช้งาน" : "ปิดใช้งาน"}
+                  </Badge>
+                  <Badge variant={detailCompany.enableApi ? "success" : "outline"} className="text-[11px] rounded-full">
+                    <Key className="h-3 w-3 mr-1" />
+                    REST API: {detailCompany.enableApi ? "เปิดใช้งาน" : "ปิดใช้งาน"}
+                  </Badge>
+                  <Badge variant={detailCompany.enableWebhook ? "success" : "outline"} className="text-[11px] rounded-full">
+                    <Webhook className="h-3 w-3 mr-1" />
+                    Webhooks: {detailCompany.enableWebhook ? "เปิดใช้งาน" : "ปิดใช้งาน"}
+                  </Badge>
                 </div>
               </div>
 

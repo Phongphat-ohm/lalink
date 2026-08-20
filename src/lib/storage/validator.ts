@@ -68,7 +68,7 @@ export function validateUploadFile(
   if (buffer.byteLength > MAX_FILE_SIZE_BYTES) {
     return {
       isValid: false,
-      error: `ขนาดไฟล์เกินกำหนด (สูงสุด ${MAX_FILE_SIZE_BYTES / (1024 * 1024)} MB)`,
+      error: `ขนาดไฟล์เกินกำหนด (สูงสุด ${MAX_FILE_SIZE_BYTES / (1024 * 1024)} MB) กรุณาเลือกไฟล์ใหม่หรือลดขนาดไฟล์แล้วลองอัปโหลดอีกครั้ง`,
     };
   }
 

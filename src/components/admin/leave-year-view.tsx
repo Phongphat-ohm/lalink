@@ -26,6 +26,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { CalendarRange, Plus, Loader2, RefreshCw, Check, AlertCircle } from "lucide-react";
 import { toast } from "@/components/ui/toast";
+import { ThaiDatePicker } from "@/components/ui/thai-date-picker";
+import { formatThaiDate, toBuddhistYear } from "@/lib/utils/date";
 
 interface SerializedLeaveYear {
   id: string;
@@ -53,10 +55,7 @@ interface LeaveYearViewProps {
 }
 
 function formatDate(iso: string): string {
-  const d = new Date(iso);
-  const dd = String(d.getDate()).padStart(2, "0");
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  return `${dd}/${mm}/${d.getFullYear()}`;
+  return formatThaiDate(iso, "short");
 }
 
 export function LeaveYearView({
@@ -207,7 +206,7 @@ export function LeaveYearView({
                     {ly.name}
                   </td>
                   <td className="py-3.5 px-4 font-mono font-semibold text-[#533afd] tabular-nums">
-                    {ly.year}
+                    {toBuddhistYear(ly.year)}
                   </td>
                   <td className="py-3.5 px-4 text-[#64748d] font-mono tabular-nums">
                     {formatDate(ly.startDate)}
@@ -298,23 +297,21 @@ export function LeaveYearView({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <span className="text-xs text-[#64748d]">
-                  วันเริ่มต้น
+                  วันเริ่มต้น (พ.ศ.)
                 </span>
-                <Input
+                <ThaiDatePicker
                   id="ly-start"
                   name="startDate"
-                  type="date"
                   required
                 />
               </div>
               <div className="space-y-1.5">
                 <span className="text-xs text-[#64748d]">
-                  วันสิ้นสุด
+                  วันสิ้นสุด (พ.ศ.)
                 </span>
-                <Input
+                <ThaiDatePicker
                   id="ly-end"
                   name="endDate"
-                  type="date"
                   required
                 />
               </div>

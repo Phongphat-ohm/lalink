@@ -26,6 +26,7 @@ export default async function LiffHistoryPage() {
         orderBy: { stepOrder: "asc" },
         include: { approver: { select: { name: true } } },
       },
+      attachments: { orderBy: { createdAt: "desc" } },
     },
   });
 
@@ -41,6 +42,13 @@ export default async function LiffHistoryPage() {
     status: req.status,
     rejectionReason: req.rejectionReason,
     createdAt: req.createdAt.toISOString(),
+    attachments: req.attachments.map((att) => ({
+      id: att.id,
+      originalName: att.originalName,
+      mimeType: att.mimeType,
+      size: att.size,
+      createdAt: att.createdAt.toISOString(),
+    })),
     leaveType: {
       name: req.leaveType.name,
       code: req.leaveType.code,

@@ -21,6 +21,11 @@ const cspHeader = `
 
 const nextConfig: NextConfig = {
   allowedDevOrigins: ["selfdev.ppkxb.space"],
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "10mb",
+    },
+  },
   async headers() {
     return [
       {

@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { ThaiDatePicker } from "@/components/ui/thai-date-picker";
 import {
   Dialog,
   DialogContent,
@@ -28,6 +29,7 @@ import {
   approveLeaveRequestAction,
   rejectLeaveRequestAction,
 } from "@/features/leave";
+import { getLeaveAttachmentDownloadUrlAction } from "@/features/storage";
 import {
   CheckCircle2,
   XCircle,
@@ -39,6 +41,9 @@ import {
   FileText,
   AlertCircle,
   FileCheck,
+  Paperclip,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 import { DataTablePagination } from "@/components/ui/data-table-pagination";
 
@@ -80,6 +85,13 @@ export interface SerializedLeaveRequest {
     code: string;
     isPaid: boolean;
   };
+  attachments?: {
+    id: string;
+    originalName: string;
+    mimeType: string;
+    size: number;
+    createdAt: string;
+  }[];
 }
 
 export interface AvailableLeaveEmployee {
@@ -117,6 +129,24 @@ export function LeaveRequestsTable({
   // Selected Request for Details Modal
   const [selectedRequest, setSelectedRequest] =
     React.useState<SerializedLeaveRequest | null>(null);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] =
+    React.useState<string | null>(null);
+
+  async function handleDownloadAttachment(attachmentId: string) {
+    try {
+      setDownloadingAttachmentId(attachmentId);
+      const res = await getLeaveAttachmentDownloadUrlAction(attachmentId);
+      setDownloadingAttachmentId(null);
+      if (res.success && res.data?.downloadUrl) {
+        window.open(res.data.downloadUrl, "_blank");
+      } else {
+        alert(res.message || "ไม่สามารถเปิดไฟล์แนบได้");
+      }
+    } catch (err) {
+      setDownloadingAttachmentId(null);
+      alert("เกิดข้อผิดพลาดในการเปิดไฟล์แนบ");
+    }
+  }
 
   // Approve Dialog State
   const [approveTarget, setApproveTarget] =
@@ -698,6 +728,49 @@ export function LeaveRequestsTable({
                 </p>
               </div>
 
+              {/* Attachments */}
+              {selectedRequest.attachments && selectedRequest.attachments.length > 0 && (
+                <div className="rounded-xl border border-[#e3e8ee] p-3.5 text-xs space-y-2 bg-white">
+                  <div className="flex items-center space-x-2 text-[#0d253d] font-semibold">
+                    <Paperclip className="h-4 w-4 text-[#533afd]" />
+                    <span>เอกสารแนบ / ใบรับรองแพทย์ ({selectedRequest.attachments.length} ไฟล์)</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {selectedRequest.attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-[#f6f9fc] border border-[#e3e8ee]"
+                      >
+                        <div className="flex items-center gap-2 overflow-hidden min-w-0">
+                          <FileText className="h-4 w-4 text-[#533afd] shrink-0" />
+                          <span className="font-semibold text-[#0d253d] truncate max-w-[220px]">
+                            {att.originalName}
+                          </span>
+                          <span className="text-[10px] text-[#64748d] font-mono shrink-0">
+                            ({(att.size / 1024).toFixed(1)} KB)
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={downloadingAttachmentId === att.id}
+                          onClick={() => handleDownloadAttachment(att.id)}
+                          className="h-7 text-xs rounded-full px-3 text-[#533afd] border-[#533afd]/30 hover:bg-[#533afd]/10 font-semibold cursor-pointer shrink-0"
+                        >
+                          {downloadingAttachmentId === att.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          ) : (
+                            <ExternalLink className="h-3 w-3 mr-1" />
+                          )}
+                          เปิดดูเอกสาร
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Approval Workflow Progress */}
               {selectedRequest.approvals.length > 0 && (
                 <div className="rounded-xl border border-[#e3e8ee] p-3.5 text-xs space-y-2.5 bg-white">
@@ -1065,27 +1138,25 @@ export function LeaveRequestsTable({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-[#0d253d]">
-                  ตั้งแต่วันที่ <span className="text-[#ea2261]">*</span>
+                  ตั้งแต่วันที่ (พ.ศ.) <span className="text-[#ea2261]">*</span>
                 </label>
-                <Input
-                  type="date"
+                <ThaiDatePicker
+                  name="proxyStartDate"
                   value={proxyStartDate}
-                  onChange={(e) => setProxyStartDate(e.target.value)}
+                  onChange={(isoCE) => setProxyStartDate(isoCE)}
                   required
-                  className="h-9 rounded-xl text-xs font-mono"
                 />
               </div>
 
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-[#0d253d]">
-                  ถึงวันที่ <span className="text-[#ea2261]">*</span>
+                  ถึงวันที่ (พ.ศ.) <span className="text-[#ea2261]">*</span>
                 </label>
-                <Input
-                  type="date"
+                <ThaiDatePicker
+                  name="proxyEndDate"
                   value={proxyEndDate}
-                  onChange={(e) => setProxyEndDate(e.target.value)}
+                  onChange={(isoCE) => setProxyEndDate(isoCE)}
                   required
-                  className="h-9 rounded-xl text-xs font-mono"
                 />
               </div>
             </div>

@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "companies" ADD COLUMN "enableLinePush" BOOLEAN NOT NULL DEFAULT true,
+ADD COLUMN "enableApi" BOOLEAN NOT NULL DEFAULT false,
+ADD COLUMN "enableWebhook" BOOLEAN NOT NULL DEFAULT false;

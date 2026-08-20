@@ -18,22 +18,43 @@ import { getDefaultJobQueue } from "@/lib/jobs";
 import type { ActionResult } from "@/lib/types";
 export type { ActionResult };
 
+import {
+  toGregorianYear,
+  parseThaiDateToCE,
+} from "@/lib/utils/date";
+
 const leaveYearSchema = z
   .object({
     id: z.string().optional(),
     name: z.string().min(1, "กรุณาระบุชื่อปีลา"),
-    year: z.coerce.number().int().min(2020).max(2100),
+    year: z.coerce
+      .number()
+      .int()
+      .min(2020)
+      .max(2700)
+      .transform((y) => toGregorianYear(y)),
     startDate: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ต้องเป็น YYYY-MM-DD"),
+      .refine((val) => parseThaiDateToCE(val) !== null, {
+        message: "รูปแบบวันที่เริ่มต้นไม่ถูกต้อง",
+      }),
     endDate: z
       .string()
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ต้องเป็น YYYY-MM-DD"),
+      .refine((val) => parseThaiDateToCE(val) !== null, {
+        message: "รูปแบบวันที่สิ้นสุดไม่ถูกต้อง",
+      }),
   })
-  .refine((d) => new Date(d.startDate) <= new Date(d.endDate), {
-    message: "วันที่เริ่มต้นต้องมาก่อนหรือตรงกับวันที่สิ้นสุด",
-    path: ["endDate"],
-  });
+  .refine(
+    (d) => {
+      const s = parseThaiDateToCE(d.startDate);
+      const e = parseThaiDateToCE(d.endDate);
+      return s && e && s <= e;
+    },
+    {
+      message: "วันที่เริ่มต้นต้องมาก่อนหรือตรงกับวันที่สิ้นสุด",
+      path: ["endDate"],
+    },
+  );
 
 /**
  * Server action to create or update a leave year.
@@ -69,8 +90,8 @@ export async function saveLeaveYearAction(
     }
 
     const data = validated.data;
-    const startObj = new Date(data.startDate);
-    const endObj = new Date(data.endDate);
+    const startObj = parseThaiDateToCE(data.startDate)!;
+    const endObj = parseThaiDateToCE(data.endDate)!;
 
     let result;
     if (data.id) {

@@ -69,17 +69,33 @@ export function EmployeeImportModal({
     setError(null);
     setResult(null);
 
-    const formData = new FormData();
-    formData.append("file", file);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
 
-    const res = await importEmployeesAction(null, formData);
-    setIsImporting(false);
+      const res = await importEmployeesAction(null, formData);
+      setIsImporting(false);
 
-    if (res.success && res.data) {
-      setResult(res.data);
-      router.refresh();
-    } else {
-      setError(res.message || "เกิดข้อผิดพลาดในการนำเข้าข้อมูล");
+      if (res.success && res.data) {
+        setResult(res.data);
+        router.refresh();
+      } else {
+        setError(res.message || "เกิดข้อผิดพลาดในการนำเข้าข้อมูล");
+      }
+    } catch (err: any) {
+      setIsImporting(false);
+      const errMsg = err?.message || String(err);
+      if (
+        errMsg.includes("Body exceeded") ||
+        errMsg.includes("413") ||
+        errMsg.includes("limit")
+      ) {
+        setError(
+          "ขนาดไฟล์เกินกำหนด (สูงสุด 10 MB) กรุณาเลือกไฟล์ใหม่หรือแบ่งข้อมูลเป็นไฟล์ย่อยแล้วลองอัปโหลดอีกครั้ง",
+        );
+      } else {
+        setError("เกิดข้อผิดพลาดในการนำเข้าข้อมูล กรุณาลองใหม่อีกครั้ง");
+      }
     }
   }
 
@@ -197,6 +213,14 @@ export function EmployeeImportModal({
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0] || null;
+                if (f && f.size > 10 * 1024 * 1024) {
+                  setError(
+                    `ขนาดไฟล์ "${f.name}" เกิน 10 MB (${(f.size / (1024 * 1024)).toFixed(1)} MB) กรุณาเลือกไฟล์ใหม่หรือลดขนาดไฟล์แล้วลองอัปโหลดอีกครั้ง`,
+                  );
+                  setFile(null);
+                  e.target.value = "";
+                  return;
+                }
                 setFile(f);
                 setError(null);
                 setResult(null);

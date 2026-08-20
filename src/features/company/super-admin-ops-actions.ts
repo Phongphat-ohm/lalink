@@ -101,11 +101,12 @@ export async function triggerDatabaseBackupAction(): Promise<ActionResult<{ back
 }
 
 /**
- * Super Admin: Create API Key
+ * Super Admin: Create API Key (Platform or Company-scoped)
  */
 export async function createApiKeyAction(
   name: string,
   permissions: string[],
+  companyId?: string | null,
 ): Promise<ActionResult> {
   try {
     const session = await getSession();
@@ -126,6 +127,7 @@ export async function createApiKeyAction(
 
     const apiKey = await prisma.apiKey.create({
       data: {
+        companyId: companyId || null,
         name,
         keyPrefix,
         keyHash,
@@ -140,7 +142,7 @@ export async function createApiKeyAction(
       action: "CREATE_API_KEY",
       resource: "ApiKey",
       resourceId: apiKey.id,
-      details: { name: apiKey.name, keyPrefix: apiKey.keyPrefix },
+      details: { name: apiKey.name, keyPrefix: apiKey.keyPrefix, companyId: apiKey.companyId },
     });
 
     revalidatePath("/system-admin/api-keys");
@@ -198,3 +200,235 @@ export async function revokeApiKeyAction(
     return { success: false, message: "เกิดข้อผิดพลาดในการเพิกถอน API Key" };
   }
 }
+
+/**
+ * Super Admin: Create Webhook Subscription for any company
+ */
+export async function superAdminCreateWebhookAction(
+  companyId: string,
+  url: string,
+  events: string[],
+): Promise<ActionResult> {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "SYSTEM_ADMIN") {
+      return {
+        success: false,
+        message: "Unauthorized: Super Admin access required",
+      };
+    }
+
+    if (!companyId || !url || !Array.isArray(events) || events.length === 0) {
+      return { success: false, message: "กรุณาระบุข้อมูลให้ครบถ้วน" };
+    }
+
+    const secret = crypto.randomBytes(32).toString("hex");
+    const secretHash = crypto
+      .createHash("sha256")
+      .update(secret)
+      .digest("hex");
+
+    const sub = await prisma.webhookSubscription.create({
+      data: {
+        companyId,
+        url,
+        secret: secretHash,
+        events,
+        isActive: true,
+      },
+    });
+
+    await AuditLogger.log({
+      actorType: "USER",
+      actorId: session.userId,
+      action: "CREATE_WEBHOOK",
+      resource: "WebhookSubscription",
+      resourceId: sub.id,
+      details: { url, events, companyId },
+    });
+
+    revalidatePath("/system-admin/webhooks");
+
+    return {
+      success: true,
+      message: "สร้าง Webhook Subscription สำเร็จ!",
+      data: {
+        id: sub.id,
+        url: sub.url,
+        events: sub.events,
+        secret,
+      },
+    };
+  } catch (error) {
+    console.error("Super Admin Create Webhook Error:", error);
+    return { success: false, message: "เกิดข้อผิดพลาดในการสร้าง Webhook" };
+  }
+}
+
+/**
+ * Super Admin: Delete Webhook Subscription
+ */
+export async function superAdminDeleteWebhookAction(
+  subscriptionId: string,
+): Promise<ActionResult> {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "SYSTEM_ADMIN") {
+      return {
+        success: false,
+        message: "Unauthorized: Super Admin access required",
+      };
+    }
+
+    await prisma.webhookSubscription.delete({
+      where: { id: subscriptionId },
+    });
+
+    await AuditLogger.log({
+      actorType: "USER",
+      actorId: session.userId,
+      action: "DELETE_WEBHOOK",
+      resource: "WebhookSubscription",
+      resourceId: subscriptionId,
+    });
+
+    revalidatePath("/system-admin/webhooks");
+
+    return { success: true, message: "ลบ Webhook เรียบร้อยแล้ว" };
+  } catch (error) {
+    console.error("Super Admin Delete Webhook Error:", error);
+    return { success: false, message: "เกิดข้อผิดพลาดในการลบ Webhook" };
+  }
+}
+
+/**
+ * Super Admin: Toggle Webhook Subscription Active
+ */
+export async function superAdminToggleWebhookAction(
+  subscriptionId: string,
+  isActive: boolean,
+): Promise<ActionResult> {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "SYSTEM_ADMIN") {
+      return {
+        success: false,
+        message: "Unauthorized: Super Admin access required",
+      };
+    }
+
+    await prisma.webhookSubscription.update({
+      where: { id: subscriptionId },
+      data: { isActive },
+    });
+
+    await AuditLogger.log({
+      actorType: "USER",
+      actorId: session.userId,
+      action: isActive ? "ENABLE_WEBHOOK_SYSTEM" : "DISABLE_WEBHOOK_SYSTEM",
+      resource: "WebhookSubscription",
+      resourceId: subscriptionId,
+      details: { url: (await prisma.webhookSubscription.findUnique({ where: { id: subscriptionId } }))?.url, isActive },
+    });
+
+    revalidatePath("/system-admin/webhooks");
+
+    return {
+      success: true,
+      message: isActive ? "เปิดใช้งาน Webhook แล้ว" : "ปิดการใช้งาน Webhook แล้ว",
+    };
+  } catch (error) {
+    console.error("Super Admin Toggle Webhook Error:", error);
+    return { success: false, message: "เกิดข้อผิดพลาด" };
+  }
+}
+
+/**
+ * Super Admin: Test Webhook Endpoint Dispatch
+ */
+export async function superAdminTestWebhookAction(
+  subscriptionId: string,
+): Promise<ActionResult<{ status: number; success: boolean; body?: string }>> {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "SYSTEM_ADMIN") {
+      return {
+        success: false,
+        message: "Unauthorized: Super Admin access required",
+      };
+    }
+
+    const sub = await prisma.webhookSubscription.findUnique({
+      where: { id: subscriptionId },
+    });
+    if (!sub) {
+      return { success: false, message: "ไม่พบ Webhook Subscription" };
+    }
+
+    const testPayload = {
+      event: "system.test",
+      timestamp: new Date().toISOString(),
+      triggeredBy: session.name,
+      message: "Test webhook event triggered from LALINK System Admin console.",
+    };
+
+    const signature = crypto
+      .createHash("sha256")
+      .update(sub.secret + JSON.stringify(testPayload))
+      .digest("hex");
+
+    const res = await fetch(sub.url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-webhook-signature": signature,
+      },
+      body: JSON.stringify(testPayload),
+    });
+
+    const resBody = await res.text();
+
+    await prisma.webhookEventLog.create({
+      data: {
+        subscriptionId: sub.id,
+        eventName: "system.test",
+        payload: testPayload,
+        success: res.ok,
+        responseStatus: res.status,
+        responseBody: resBody.slice(0, 500),
+      },
+    });
+
+    await AuditLogger.log({
+      actorType: "USER",
+      actorId: session.userId,
+      action: "TEST_WEBHOOK",
+      resource: "WebhookSubscription",
+      resourceId: sub.id,
+      details: { url: sub.url, event: "system.test", success: res.ok, status: res.status },
+    });
+
+    revalidatePath("/system-admin/webhooks");
+
+    if (res.ok) {
+      return {
+        success: true,
+        message: `ทดสอบสำเร็จ! Server ปลายทางตอบกลับ HTTP ${res.status}`,
+        data: { status: res.status, success: true, body: resBody.slice(0, 200) },
+      };
+    } else {
+      return {
+        success: false,
+        message: `Server ปลายทางตอบกลับข้อผิดพลาด HTTP ${res.status}`,
+        data: { status: res.status, success: false, body: resBody.slice(0, 200) },
+      };
+    }
+  } catch (error) {
+    console.error("Super Admin Test Webhook Error:", error);
+    return {
+      success: false,
+      message: `ไม่สามารถส่ง Webhook ไปยังปลายทางได้: ${(error as Error).message}`,
+    };
+  }
+}
+

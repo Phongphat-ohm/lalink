@@ -157,34 +157,50 @@ export function MailboxView({ threads, currentUserId }: MailboxViewProps) {
 
     setIsSending(true);
 
-    let fileAttachment: FileAttachmentPayload | null = null;
-    if (composeFile) {
-      const base64 = await fileToBase64(composeFile);
-      fileAttachment = {
-        originalName: composeFile.name,
-        base64,
-        mimeType: composeFile.type || "application/octet-stream",
-      };
-    }
+    try {
+      let fileAttachment: FileAttachmentPayload | null = null;
+      if (composeFile) {
+        const base64 = await fileToBase64(composeFile);
+        fileAttachment = {
+          originalName: composeFile.name,
+          base64,
+          mimeType: composeFile.type || "application/octet-stream",
+        };
+      }
 
-    const result = await createMessageThreadAction({
-      subject: composeSubject,
-      category: composeCategory,
-      initialMessage: composeContent,
-      fileAttachment,
-    });
-    setIsSending(false);
+      const result = await createMessageThreadAction({
+        subject: composeSubject,
+        category: composeCategory,
+        initialMessage: composeContent,
+        fileAttachment,
+      });
+      setIsSending(false);
 
-    if (result.success && result.data) {
-      setIsComposeOpen(false);
-      setComposeSubject("");
-      setComposeContent("");
-      setComposeFile(null);
-      setActiveThreadId(result.data.threadId);
-      toast.success(result.message || "ส่งข้อความเรียบร้อยแล้ว");
-      router.refresh();
-    } else {
-      toast.error(result.message || "เกิดข้อผิดพลาดในการส่งข้อความ");
+      if (result.success && result.data) {
+        setIsComposeOpen(false);
+        setComposeSubject("");
+        setComposeContent("");
+        setComposeFile(null);
+        setActiveThreadId(result.data.threadId);
+        toast.success(result.message || "ส่งข้อความเรียบร้อยแล้ว");
+        router.refresh();
+      } else {
+        toast.error(result.message || "เกิดข้อผิดพลาดในการส่งข้อความ");
+      }
+    } catch (err: any) {
+      setIsSending(false);
+      const errMsg = err?.message || String(err);
+      if (
+        errMsg.includes("Body exceeded") ||
+        errMsg.includes("413") ||
+        errMsg.includes("limit")
+      ) {
+        toast.error(
+          "ขนาดไฟล์แนบเกินกำหนด (สูงสุด 10 MB) กรุณาลดขนาดไฟล์แล้วลองอัปโหลดใหม่อีกครั้ง",
+        );
+      } else {
+        toast.error("เกิดข้อผิดพลาดในการส่งข้อความ กรุณาลองใหม่อีกครั้ง");
+      }
     }
   }
 
@@ -194,30 +210,46 @@ export function MailboxView({ threads, currentUserId }: MailboxViewProps) {
 
     setIsReplying(true);
 
-    let fileAttachment: FileAttachmentPayload | null = null;
-    if (replyFile) {
-      const base64 = await fileToBase64(replyFile);
-      fileAttachment = {
-        originalName: replyFile.name,
-        base64,
-        mimeType: replyFile.type || "application/octet-stream",
-      };
-    }
+    try {
+      let fileAttachment: FileAttachmentPayload | null = null;
+      if (replyFile) {
+        const base64 = await fileToBase64(replyFile);
+        fileAttachment = {
+          originalName: replyFile.name,
+          base64,
+          mimeType: replyFile.type || "application/octet-stream",
+        };
+      }
 
-    const result = await replyMessageAction({
-      threadId: activeThread.id,
-      content: replyText,
-      fileAttachment,
-    });
-    setIsReplying(false);
+      const result = await replyMessageAction({
+        threadId: activeThread.id,
+        content: replyText,
+        fileAttachment,
+      });
+      setIsReplying(false);
 
-    if (result.success) {
-      setReplyText("");
-      setReplyFile(null);
-      toast.success("ส่งข้อความตอบกลับสำเร็จ");
-      router.refresh();
-    } else {
-      toast.error(result.message || "เกิดข้อผิดพลาดในการตอบกลับ");
+      if (result.success) {
+        setReplyText("");
+        setReplyFile(null);
+        toast.success("ส่งข้อความตอบกลับสำเร็จ");
+        router.refresh();
+      } else {
+        toast.error(result.message || "เกิดข้อผิดพลาดในการตอบกลับ");
+      }
+    } catch (err: any) {
+      setIsReplying(false);
+      const errMsg = err?.message || String(err);
+      if (
+        errMsg.includes("Body exceeded") ||
+        errMsg.includes("413") ||
+        errMsg.includes("limit")
+      ) {
+        toast.error(
+          "ขนาดไฟล์แนบเกินกำหนด (สูงสุด 10 MB) กรุณาลดขนาดไฟล์แล้วลองอัปโหลดใหม่อีกครั้ง",
+        );
+      } else {
+        toast.error("เกิดข้อผิดพลาดในการตอบกลับ กรุณาลองใหม่อีกครั้ง");
+      }
     }
   }
 
@@ -501,8 +533,17 @@ export function MailboxView({ threads, currentUserId }: MailboxViewProps) {
                         type="file"
                         ref={replyFileInputRef}
                         onChange={(e) => {
-                          if (e.target.files && e.target.files[0]) {
-                            setReplyFile(e.target.files[0]);
+                          const f = e.target.files?.[0];
+                          if (f) {
+                            if (f.size > 10 * 1024 * 1024) {
+                              toast.error(
+                                `ขนาดไฟล์ "${f.name}" เกิน 10 MB กรุณาเลือกไฟล์ใหม่หรือลดขนาดไฟล์แล้วลองอัปโหลดอีกครั้ง`,
+                              );
+                              setReplyFile(null);
+                              e.target.value = "";
+                              return;
+                            }
+                            setReplyFile(f);
                           }
                         }}
                         className="hidden"
@@ -609,8 +650,17 @@ export function MailboxView({ threads, currentUserId }: MailboxViewProps) {
                 type="file"
                 ref={composeFileInputRef}
                 onChange={(e) => {
-                  if (e.target.files && e.target.files[0]) {
-                    setComposeFile(e.target.files[0]);
+                  const f = e.target.files?.[0];
+                  if (f) {
+                    if (f.size > 10 * 1024 * 1024) {
+                      toast.error(
+                        `ขนาดไฟล์ "${f.name}" เกิน 10 MB กรุณาเลือกไฟล์ใหม่หรือลดขนาดไฟล์แล้วลองอัปโหลดอีกครั้ง`,
+                      );
+                      setComposeFile(null);
+                      e.target.value = "";
+                      return;
+                    }
+                    setComposeFile(f);
                   }
                 }}
                 className="hidden"

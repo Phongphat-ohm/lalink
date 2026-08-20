@@ -12,6 +12,8 @@ import {
   UploadResult,
 } from "./types";
 
+const globalMockStore = new Map<string, { buffer: Uint8Array; contentType: string }>();
+
 export class S3StorageService implements IStorageService {
   private client: S3Client;
   private bucketName: string;
@@ -63,7 +65,9 @@ export class S3StorageService implements IStorageService {
   async upload(options: UploadOptions): Promise<UploadResult> {
     const { key, buffer, contentType, metadata } = options;
 
-    if (!this.isMockMode) {
+    if (this.isMockMode) {
+      globalMockStore.set(key, { buffer, contentType });
+    } else {
       const command = new PutObjectCommand({
         Bucket: this.bucketName,
         Key: key,
@@ -87,7 +91,10 @@ export class S3StorageService implements IStorageService {
    * Delete object from S3 bucket
    */
   async delete(key: string): Promise<void> {
-    if (this.isMockMode) return;
+    if (this.isMockMode) {
+      globalMockStore.delete(key);
+      return;
+    }
 
     const command = new DeleteObjectCommand({
       Bucket: this.bucketName,
@@ -101,7 +108,10 @@ export class S3StorageService implements IStorageService {
    * Get object stream/buffer from S3 bucket
    */
   async getObject(key: string): Promise<Buffer | null> {
-    if (this.isMockMode) return null;
+    if (this.isMockMode) {
+      const item = globalMockStore.get(key);
+      return item ? Buffer.from(item.buffer) : null;
+    }
     try {
       const command = new GetObjectCommand({
         Bucket: this.bucketName,
@@ -125,7 +135,7 @@ export class S3StorageService implements IStorageService {
     expiresInSeconds: number = 900,
   ): Promise<string> {
     if (this.isMockMode) {
-      return `https://storage.lalink.local/${this.bucketName}/${key}?token=mock_signed_download_token&expires=${expiresInSeconds}`;
+      return `/api/storage/${key}`;
     }
 
     const command = new GetObjectCommand({

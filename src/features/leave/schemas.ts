@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { LeavePeriod } from "@prisma/client";
+import { parseThaiDateToCE, normalizeDateInput } from "@/lib/utils/date";
 
 export const createLeaveRequestSchema = z
   .object({
@@ -7,11 +8,15 @@ export const createLeaveRequestSchema = z
     startDate: z
       .string()
       .min(1, "กรุณาระบุวันที่เริ่มต้น")
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ต้องเป็น YYYY-MM-DD"),
+      .refine((val) => parseThaiDateToCE(val) !== null, {
+        message: "รูปแบบวันที่เริ่มต้นไม่ถูกต้อง",
+      }),
     endDate: z
       .string()
       .min(1, "กรุณาระบุวันที่สิ้นสุด")
-      .regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันที่ต้องเป็น YYYY-MM-DD"),
+      .refine((val) => parseThaiDateToCE(val) !== null, {
+        message: "รูปแบบวันที่สิ้นสุดไม่ถูกต้อง",
+      }),
     startPeriod: z.nativeEnum(LeavePeriod).default(LeavePeriod.FULL_DAY),
     endPeriod: z.nativeEnum(LeavePeriod).default(LeavePeriod.FULL_DAY),
     hours: z.coerce
@@ -24,8 +29,9 @@ export const createLeaveRequestSchema = z
   })
   .refine(
     (data) => {
-      const start = new Date(data.startDate);
-      const end = new Date(data.endDate);
+      const start = parseThaiDateToCE(data.startDate);
+      const end = parseThaiDateToCE(data.endDate);
+      if (!start || !end) return false;
       return start <= end;
     },
     {
@@ -40,7 +46,9 @@ export const createLeaveRequestSchema = z
         data.endPeriod === LeavePeriod.HOURLY;
       // Hourly leave must be requested within a single day
       if (isHourly) {
-        return data.startDate === data.endDate;
+        const startNorm = normalizeDateInput(data.startDate);
+        const endNorm = normalizeDateInput(data.endDate);
+        return startNorm === endNorm;
       }
       return true;
     },

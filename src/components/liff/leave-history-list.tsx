@@ -23,6 +23,7 @@ import {
   AlertDialogCancel,
 } from "@/components/ui/alert-dialog";
 import { cancelLeaveRequestAction } from "@/features/leave";
+import { getLeaveAttachmentDownloadUrlAction } from "@/features/storage";
 import {
   Clock,
   Calendar,
@@ -36,6 +37,8 @@ import {
   Circle,
   UserCheck,
   Timer,
+  Paperclip,
+  ExternalLink,
 } from "lucide-react";
 
 export interface SerializedEmployeeLeaveRequest {
@@ -55,6 +58,13 @@ export interface SerializedEmployeeLeaveRequest {
     code: string;
     isPaid: boolean;
   };
+  attachments?: {
+    id: string;
+    originalName: string;
+    mimeType: string;
+    size: number;
+    createdAt: string;
+  }[];
   approvals: {
     id: string;
     stepOrder: number;
@@ -75,6 +85,24 @@ export function LeaveHistoryList({ initialRequests }: LeaveHistoryListProps) {
   const [requests, setRequests] = React.useState(initialRequests);
   const [selectedRequest, setSelectedRequest] =
     React.useState<SerializedEmployeeLeaveRequest | null>(null);
+  const [downloadingAttachmentId, setDownloadingAttachmentId] =
+    React.useState<string | null>(null);
+
+  async function handleDownloadAttachment(attachmentId: string) {
+    try {
+      setDownloadingAttachmentId(attachmentId);
+      const res = await getLeaveAttachmentDownloadUrlAction(attachmentId);
+      setDownloadingAttachmentId(null);
+      if (res.success && res.data?.downloadUrl) {
+        window.open(res.data.downloadUrl, "_blank");
+      } else {
+        alert(res.message || "ไม่สามารถเปิดไฟล์แนบได้");
+      }
+    } catch (err) {
+      setDownloadingAttachmentId(null);
+      alert("เกิดข้อผิดพลาดในการเปิดไฟล์แนบ");
+    }
+  }
 
   // Cancel Request Dialog State
   const [cancelTarget, setCancelTarget] =
@@ -350,6 +378,49 @@ export function LeaveHistoryList({ initialRequests }: LeaveHistoryListProps) {
                   {selectedRequest.reason || "ไม่ระบุเหตุผล"}
                 </p>
               </div>
+
+              {/* Attachments */}
+              {selectedRequest.attachments && selectedRequest.attachments.length > 0 && (
+                <div className="rounded-xl border border-[#e3e8ee] p-3 space-y-2 bg-white">
+                  <div className="flex items-center space-x-1.5 font-semibold text-[#0d253d]">
+                    <Paperclip className="h-4 w-4 text-[#533afd]" />
+                    <span>เอกสารแนบ / ใบรับรองแพทย์ ({selectedRequest.attachments.length} ไฟล์)</span>
+                  </div>
+                  <div className="space-y-1.5">
+                    {selectedRequest.attachments.map((att) => (
+                      <div
+                        key={att.id}
+                        className="flex items-center justify-between p-2 rounded-xl bg-[#f6f9fc] border border-[#e3e8ee]"
+                      >
+                        <div className="flex items-center gap-2 overflow-hidden min-w-0">
+                          <FileText className="h-4 w-4 text-[#533afd] shrink-0" />
+                          <span className="font-semibold text-[#0d253d] truncate max-w-[160px]">
+                            {att.originalName}
+                          </span>
+                          <span className="text-[10px] text-[#64748d] font-mono shrink-0">
+                            ({(att.size / 1024).toFixed(1)} KB)
+                          </span>
+                        </div>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={downloadingAttachmentId === att.id}
+                          onClick={() => handleDownloadAttachment(att.id)}
+                          className="h-7 text-xs rounded-full px-2.5 text-[#533afd] border-[#533afd]/30 hover:bg-[#533afd]/10 font-semibold cursor-pointer shrink-0"
+                        >
+                          {downloadingAttachmentId === att.id ? (
+                            <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                          ) : (
+                            <ExternalLink className="h-3 w-3 mr-1" />
+                          )}
+                          ดูเอกสาร
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Approval Chain */}
               {selectedRequest.approvals.length > 0 && (

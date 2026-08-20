@@ -32,6 +32,8 @@ import {
   UserRound,
   CreditCard,
   Mail,
+  BookOpen,
+  Webhook,
 } from "lucide-react";
 import { logoutAdminAction } from "@/features/auth";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions/rbac";
@@ -42,6 +44,8 @@ interface AdminSidebarProps {
   userRole: string;
   companyName: string;
   companyCode?: string;
+  enableApi?: boolean;
+  enableWebhook?: boolean;
   children: React.ReactNode;
 }
 
@@ -50,6 +54,8 @@ export function AdminSidebarLayout({
   userRole,
   companyName,
   companyCode = "DEMO",
+  enableApi = true,
+  enableWebhook = true,
   children,
 }: AdminSidebarProps) {
   const pathname = usePathname();
@@ -71,10 +77,16 @@ export function AdminSidebarLayout({
           icon: CalendarDays,
           permission: PERMISSIONS.LEAVE_READ,
         },
+        {
+          href: "/admin/reports",
+          label: "รายงานและสถิติ",
+          icon: BarChart3,
+          permission: PERMISSIONS.REPORT_READ,
+        },
       ],
     },
     {
-      group: "ใบลา",
+      group: "การลางาน",
       items: [
         {
           href: "/admin/leave-requests",
@@ -109,7 +121,7 @@ export function AdminSidebarLayout({
       ],
     },
     {
-      group: "เวลาทำงาน",
+      group: "เวลาทำงาน & กะ",
       items: [
         {
           href: "/admin/shifts",
@@ -132,7 +144,7 @@ export function AdminSidebarLayout({
       ],
     },
     {
-      group: "โครงสร้างองค์กร",
+      group: "องค์กร & พนักงาน",
       items: [
         {
           href: "/admin/employees",
@@ -161,7 +173,7 @@ export function AdminSidebarLayout({
       ],
     },
     {
-      group: "LINE & การสื่อสาร",
+      group: "สื่อสาร & LINE",
       items: [
         {
           href: "/admin/line-accounts",
@@ -183,20 +195,42 @@ export function AdminSidebarLayout({
       ],
     },
     {
-      group: "รายงาน & ระบบ",
+      group: "เชื่อมต่อ & API",
       items: [
-        {
-          href: "/admin/reports",
-          label: "รายงานและสถิติ",
-          icon: BarChart3,
-          permission: PERMISSIONS.REPORT_READ,
-        },
-        {
-          href: "/admin/audit-logs",
-          label: "บันทึกประวัติการทำงาน",
-          icon: ShieldAlert,
-          permission: PERMISSIONS.AUDIT_READ,
-        },
+        ...(enableApi
+          ? [
+              {
+                href: "/admin/api-keys",
+                label: "กุญแจเชื่อมต่อ API",
+                icon: KeyRound,
+                permission: PERMISSIONS.APIKEY_MANAGE,
+              },
+            ]
+          : []),
+        ...(enableWebhook
+          ? [
+              {
+                href: "/admin/webhooks",
+                label: "เว็บฮุก (Webhooks)",
+                icon: Webhook,
+                permission: PERMISSIONS.WEBHOOK_MANAGE,
+              },
+            ]
+          : []),
+        ...(enableApi || enableWebhook
+          ? [
+              {
+                href: "/docs",
+                label: "คู่มือ & API Docs",
+                icon: BookOpen,
+              },
+            ]
+          : []),
+      ],
+    },
+    {
+      group: "ตั้งค่า & การจัดการ",
+      items: [
         {
           href: "/admin/users",
           label: "ผู้ใช้เข้าสู่ระบบ",
@@ -214,6 +248,12 @@ export function AdminSidebarLayout({
           label: "ตั้งค่าระบบองค์กร",
           icon: Settings,
           permission: PERMISSIONS.COMPANY_UPDATE,
+        },
+        {
+          href: "/admin/audit-logs",
+          label: "บันทึกประวัติการทำงาน",
+          icon: ShieldAlert,
+          permission: PERMISSIONS.AUDIT_READ,
         },
       ],
     },

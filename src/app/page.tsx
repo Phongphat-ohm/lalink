@@ -32,6 +32,11 @@ export default function HomePage() {
           </div>
 
           <div className="flex items-center space-x-3">
+            <Link href="/docs">
+              <Button variant="ghost" size="sm" className="text-slate-600 hover:text-slate-900">
+                เอกสารคู่มือ & API
+              </Button>
+            </Link>
             <Link href="/admin/login">
               <Button variant="outline" size="sm">
                 เข้าสู่ระบบผู้ดูแล
@@ -81,6 +86,15 @@ export default function HomePage() {
                   className="h-12 px-8 text-base"
                 >
                   สำหรับผู้ดูแลระบบและ HR
+                </Button>
+              </Link>
+              <Link href="/docs">
+                <Button
+                  variant="ghost"
+                  size="lg"
+                  className="h-12 px-6 text-base text-slate-600 hover:text-slate-900 border border-slate-200"
+                >
+                  คู่มือ & Webhook/API
                 </Button>
               </Link>
             </div>
@@ -157,11 +171,21 @@ export default function HomePage() {
 
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white py-8">
-        <div className="container mx-auto max-w-6xl px-4 text-center sm:px-6">
-          <p className="text-sm text-slate-500">
-            © {new Date().getFullYear()} LALINK Multi-Tenant SaaS. All rights
-            reserved.
+        <div className="container mx-auto max-w-6xl px-4 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500 sm:px-6">
+          <p>
+            © {new Date().getFullYear()} LALINK Multi-Tenant SaaS. All rights reserved.
           </p>
+          <div className="flex items-center space-x-6">
+            <Link href="/docs" className="hover:text-teal-600 font-medium">
+              เอกสารคู่มือ & API Reference
+            </Link>
+            <Link href="/admin/login" className="hover:text-teal-600">
+              เข้าสู่ระบบ HR / ผู้ดูแล
+            </Link>
+            <Link href="/liff/dashboard" className="hover:text-teal-600">
+              LINE LIFF พนักงาน
+            </Link>
+          </div>
         </div>
       </footer>
     </div>

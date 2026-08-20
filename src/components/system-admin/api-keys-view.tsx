@@ -35,6 +35,9 @@ import {
   Shield,
   Clock,
   Search,
+  Building2,
+  Globe,
+  Filter,
 } from "lucide-react";
 import {
   createApiKeyAction,
@@ -52,21 +55,31 @@ export interface SerializedApiKey {
   expiresAt: string | null;
   isRevoked: boolean;
   createdAt: string;
+  company: { id: string; name: string; code: string } | null;
+}
+
+export interface AvailableCompany {
+  id: string;
+  name: string;
+  code: string;
 }
 
 interface ApiKeysViewProps {
   apiKeys: SerializedApiKey[];
+  availableCompanies: AvailableCompany[];
 }
 
-export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
+export function ApiKeysView({ apiKeys, availableCompanies }: ApiKeysViewProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<"ALL" | "ACTIVE" | "REVOKED">("ALL");
+  const [companyFilter, setCompanyFilter] = React.useState<string>("ALL");
   const [currentPage, setCurrentPage] = React.useState(1);
   const [pageSize, setPageSize] = React.useState(10);
 
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [name, setName] = React.useState("");
+  const [selectedCompanyId, setSelectedCompanyId] = React.useState<string>("PLATFORM");
   const [createdSecret, setCreatedSecret] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -77,12 +90,14 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
     e.preventDefault();
     setIsLoading(true);
 
-    const result = await createApiKeyAction(name, ["*"]);
+    const targetCompanyId = selectedCompanyId === "PLATFORM" ? null : selectedCompanyId;
+    const result = await createApiKeyAction(name, ["*"], targetCompanyId);
     setIsLoading(false);
 
     if (result.success && result.data) {
       setCreatedSecret((result.data as any).fullApiKey);
       setName("");
+      setSelectedCompanyId("PLATFORM");
       toast.success("สร้าง API Key สำเร็จ กรุณาคัดลอกเก็บไว้");
       router.refresh();
     } else {
@@ -115,14 +130,21 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
   const filteredApiKeys = apiKeys.filter((k) => {
     const matchesSearch =
       k.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      k.keyPrefix.toLowerCase().includes(searchTerm.toLowerCase());
+      k.keyPrefix.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (k.company?.name.toLowerCase().includes(searchTerm.toLowerCase()) ?? false) ||
+      (k.company?.code.toLowerCase().includes(searchTerm.toLowerCase()) ?? false);
 
     const matchesStatus =
       statusFilter === "ALL" ||
       (statusFilter === "ACTIVE" && !k.isRevoked) ||
       (statusFilter === "REVOKED" && k.isRevoked);
 
-    return matchesSearch && matchesStatus;
+    const matchesCompany =
+      companyFilter === "ALL" ||
+      (companyFilter === "PLATFORM" && !k.company) ||
+      (k.company?.id === companyFilter);
+
+    return matchesSearch && matchesStatus && matchesCompany;
   });
 
   const totalPages = Math.ceil(filteredApiKeys.length / pageSize) || 1;
@@ -137,10 +159,10 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-[#0d253d] tracking-tight">
-            การจัดการ API Keys (API Keys Management)
+            การจัดการ API Keys ทั่วทั้งระบบ
           </h1>
           <p className="text-xs text-[#64748d] mt-0.5">
-            สร้างและเพิกถอน Key สำหรับเชื่อมต่อ API ภายนอกหรือระบบ Microservices
+            สร้าง จัดการ และตรวจสอบ API Keys ระดับ Platform และของทุกบริษัทในระบบ
           </p>
         </div>
 
@@ -148,6 +170,7 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
           onClick={() => {
             setCreatedSecret(null);
             setName("");
+            setSelectedCompanyId("PLATFORM");
             setIsCreateOpen(true);
           }}
           className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white px-4 h-9 text-xs font-semibold shadow-xs"
@@ -159,22 +182,44 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
 
       {/* Search & Filter Bar */}
       <Card className="border-[#e3e8ee] bg-white shadow-xs rounded-2xl">
-        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="relative w-full sm:w-80">
-            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
-            <Input
-              type="text"
-              placeholder="ค้นหาชื่อ Key หรือ Prefix..."
-              value={searchTerm}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              className="pl-9 h-9 rounded-xl text-xs w-full"
-            />
+        <CardContent className="p-4 flex flex-col md:flex-row items-center justify-between gap-3">
+          <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto flex-1">
+            <div className="relative w-full sm:w-72">
+              <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
+              <Input
+                type="text"
+                placeholder="ค้นหาชื่อ Key, Prefix, บริษัท..."
+                value={searchTerm}
+                onChange={(e) => {
+                  setSearchTerm(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="pl-9 h-9 rounded-xl text-xs w-full"
+              />
+            </div>
+
+            <div className="flex items-center gap-2 w-full sm:w-auto">
+              <Building2 className="h-4 w-4 text-[#64748d] shrink-0" />
+              <select
+                value={companyFilter}
+                onChange={(e) => {
+                  setCompanyFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 text-xs rounded-xl border border-[#e3e8ee] bg-white px-3 text-[#0d253d] focus:outline-none focus:ring-1 focus:ring-[#533afd] w-full sm:w-48"
+              >
+                <option value="ALL">ทุกลักษณะองค์กร</option>
+                <option value="PLATFORM">🌐 Platform Key เท่านั้น</option>
+                {availableCompanies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    🏢 {c.name} ({c.code})
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          <div className="flex items-center space-x-1.5 self-start sm:self-auto">
+          <div className="flex items-center space-x-1.5 self-start md:self-auto">
             {(["ALL", "ACTIVE", "REVOKED"] as const).map((st) => (
               <button
                 key={st}
@@ -214,6 +259,7 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
               <thead className="border-b border-[#e3e8ee] text-[#64748d] uppercase bg-[#f6f9fc]">
                 <tr>
                   <th className="py-3.5 px-4 pl-5 font-semibold">ชื่อระบบ / Key Name</th>
+                  <th className="py-3.5 px-4 font-semibold">ขอบเขต / บริษัท</th>
                   <th className="py-3.5 px-4 font-semibold">Key Prefix</th>
                   <th className="py-3.5 px-4 font-semibold">สิทธิ์ (Scopes)</th>
                   <th className="py-3.5 px-4 font-semibold">สร้างเมื่อ</th>
@@ -224,7 +270,7 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
               <tbody className="divide-y divide-[#e3e8ee]/70">
                 {paginatedApiKeys.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="py-12 text-center text-[#64748d]">
+                    <td colSpan={7} className="py-12 text-center text-[#64748d]">
                       ไม่พบ API Key ตามเงื่อนไขที่ระบุ
                     </td>
                   </tr>
@@ -237,6 +283,27 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
                       <td className="py-3.5 px-4 pl-5 font-bold text-[#0d253d]">
                         {k.name}
                       </td>
+                      <td className="py-3.5 px-4">
+                        {k.company ? (
+                          <div className="flex items-center gap-1.5">
+                            <Badge
+                              variant="outline"
+                              className="text-[10px] bg-blue-50 text-blue-700 border-blue-200 rounded-full px-2 font-medium"
+                            >
+                              <Building2 className="h-2.5 w-2.5 mr-1" />
+                              {k.company.code} - {k.company.name}
+                            </Badge>
+                          </div>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className="text-[10px] bg-purple-50 text-purple-700 border-purple-200 rounded-full px-2 font-medium"
+                          >
+                            <Globe className="h-2.5 w-2.5 mr-1" />
+                            Platform System Key
+                          </Badge>
+                        )}
+                      </td>
                       <td className="py-3.5 px-4 font-mono font-bold text-[#533afd]">
                         {k.keyPrefix}••••••••
                       </td>
@@ -246,7 +313,7 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
                             <Badge
                               key={idx}
                               variant="secondary"
-                              className="text-[10px] font-mono rounded-full"
+                              className="text-[10px] font-mono rounded-full bg-[#f6f9fc] border border-[#e3e8ee]"
                             >
                               {p}
                             </Badge>
@@ -259,17 +326,15 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
                       <td className="py-3.5 px-4">
                         {k.isRevoked ? (
                           <Badge
-                            variant="destructive"
-                            className="text-[10px] rounded-full"
+                            className="text-[10px] rounded-full bg-red-100 text-red-700 border-red-200"
                           >
-                            เพิกถอนแล้ว (Revoked)
+                            เพิกถอนแล้ว
                           </Badge>
                         ) : (
                           <Badge
-                            variant="success"
-                            className="text-[10px] rounded-full"
+                            className="text-[10px] rounded-full bg-emerald-100 text-emerald-700 border-emerald-200"
                           >
-                            ใช้งานได้ (Active)
+                            ใช้งานได้
                           </Badge>
                         )}
                       </td>
@@ -281,6 +346,7 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
                             onClick={() => setRevokeTarget(k)}
                             className="h-7 text-xs rounded-full px-3 text-[#ea2261] border-[#fecdd3] hover:bg-[#ffe4e6] font-semibold cursor-pointer"
                           >
+                            <Trash2 className="h-3 w-3 mr-1" />
                             เพิกถอน
                           </Button>
                         )}
@@ -305,17 +371,14 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
 
       {/* Create Key Modal */}
       <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-        <DialogContent
-          onClose={() => setIsCreateOpen(false)}
-          className="max-w-md rounded-2xl p-6"
-        >
+        <DialogContent className="max-w-md rounded-2xl p-6">
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
               <Key className="h-5 w-5 text-[#533afd] mr-2" />
-              สร้าง API Key ใหม่
+              สร้าง API Key ใหม่ (System Admin)
             </DialogTitle>
             <DialogDescription className="text-xs text-[#64748d]">
-              กำหนดชื่อเพื่อระบุระบบภายนอกที่จะใช้งาน Key นี้
+              กำหนดชื่อและเลือกว่าต้องการสร้างสำหรับระบบกลาง (Platform) หรือเฉพาะบริษัท
             </DialogDescription>
           </DialogHeader>
 
@@ -336,7 +399,7 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
                     variant="outline"
                     size="sm"
                     onClick={handleCopySecret}
-                    className="h-8 shrink-0 text-xs"
+                    className="h-8 shrink-0 text-xs rounded-lg"
                   >
                     {copied ? (
                       <span className="text-[#059669] flex items-center">
@@ -372,11 +435,31 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
                 </label>
                 <Input
                   required
-                  placeholder="เช่น Payroll Sync System, HR External Bot"
+                  placeholder="เช่น Platform Sync System, Billing Microservice"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   className="text-xs h-9 rounded-xl"
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-[#0d253d]">
+                  ขอบเขตการใช้งาน (Scope) <span className="text-[#ea2261]">*</span>
+                </label>
+                <select
+                  value={selectedCompanyId}
+                  onChange={(e) => setSelectedCompanyId(e.target.value)}
+                  className="w-full h-9 text-xs rounded-xl border border-[#e3e8ee] bg-white px-3 text-[#0d253d] focus:outline-none focus:ring-1 focus:ring-[#533afd]"
+                >
+                  <option value="PLATFORM">🌐 Platform System Key (สิทธิ์ระดับระบบทั้งหมด)</option>
+                  <optgroup label="เฉพาะบริษัท (Company Scoped)">
+                    {availableCompanies.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        🏢 {c.name} ({c.code})
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
               </div>
 
               <DialogFooter className="mt-5">
@@ -390,7 +473,7 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isLoading}
+                  disabled={isLoading || !name.trim()}
                   className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white text-xs h-9 px-4"
                 >
                   {isLoading ? (

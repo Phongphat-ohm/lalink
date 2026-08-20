@@ -142,6 +142,12 @@ model Company {
   phone     String?       // เบอร์โทรศัพท์
   address   String?       // ที่อยู่บริษัท
   status    CompanyStatus @default(ACTIVE)
+  
+  // Feature Toggles & Capabilities
+  enableLinePush       Boolean       @default(true) // เปิด/ปิดการส่งแจ้งเตือนผ่าน LINE Push Message
+  enableApi            Boolean       @default(false) // เปิด/ปิดสิทธิ์การใช้งาน REST API
+  enableWebhook        Boolean       @default(false) // เปิด/ปิดสิทธิ์การใช้งาน Webhook
+
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -175,6 +181,7 @@ model Company {
   subscription         Subscription?
   planUpgradeRequests  PlanUpgradeRequest[]
   messageThreads       MessageThread[]
+  webhookSubscriptions WebhookSubscription[]
 
   @@index([status])
   @@index([createdAt])
@@ -1012,6 +1019,40 @@ model ApiKey {
   @@index([companyId])
   @@index([isRevoked])
   @@map("api_keys")
+}
+
+model WebhookSubscription {
+  id          String   @id @default(cuid())
+  companyId   String
+  url         String
+  secret      String   // signing secret for HMAC
+  events      String[] // list of event names to receive
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  // Relations
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  eventLogs WebhookEventLog[]
+
+  @@index([companyId])
+  @@map("webhook_subscriptions")
+}
+
+model WebhookEventLog {
+  id               String   @id @default(cuid())
+  subscriptionId   String
+  eventName        String
+  payload          Json
+  sentAt           DateTime @default(now())
+  success          Boolean  @default(false)
+  responseStatus   Int?
+  responseBody     String?
+
+  // Relations
+  subscription WebhookSubscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId])
+  @@map("webhook_event_logs")
 }
 
 // ---------------------------------------------------------------------

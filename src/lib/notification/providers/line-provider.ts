@@ -12,6 +12,28 @@ export class LineProvider implements NotificationProvider {
   readonly channels: NotificationChannel[] = [NotificationChannel.LINE];
 
   async send(context: NotificationContext): Promise<void> {
+    // Check Global & Company-specific LINE Push Settings
+    let isPushAllowed = true;
+    try {
+      const [globalSetting, company] = await Promise.all([
+        prisma.systemSetting.findUnique({
+          where: { key: "line_push_enabled" },
+          select: { value: true },
+        }),
+        prisma.company.findUnique({
+          where: { id: context.companyId },
+          select: { enableLinePush: true },
+        }),
+      ]);
+
+      const isGlobalEnabled = globalSetting ? globalSetting.value !== "false" : true;
+      const isCompanyEnabled = company ? company.enableLinePush : true;
+
+      isPushAllowed = isGlobalEnabled && isCompanyEnabled;
+    } catch (e) {
+      console.warn("Failed to check LINE push settings, defaulting to allowed:", e);
+    }
+
     const record = await prisma.notification.create({
       data: {
         companyId: context.companyId,
@@ -20,14 +42,14 @@ export class LineProvider implements NotificationProvider {
         channel: NotificationChannel.LINE,
         title: context.title,
         message: context.message,
-        status: NotificationStatus.SENT,
+        status: isPushAllowed ? NotificationStatus.SENT : NotificationStatus.PENDING,
         payload: (context.payload ?? undefined) as object | undefined,
-        sentAt: new Date(),
+        sentAt: isPushAllowed ? new Date() : null,
       },
     });
 
-    // Send LINE Push message if the recipient is linked
-    if (context.lineUserId) {
+    // Send LINE Push message if recipient is linked and push is enabled
+    if (context.lineUserId && isPushAllowed) {
       const payload = context.payload;
       const messages = Array.isArray(payload)
         ? payload

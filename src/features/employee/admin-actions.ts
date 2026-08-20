@@ -25,12 +25,17 @@ const NON_ACTIVE_STATUSES = new Set<EmployeeStatus>([
   EmployeeStatus.TERMINATED,
 ]);
 
+import { parseThaiDateToCE, normalizeDateInput } from "@/lib/utils/date";
+
 const employeeBaseSchema = {
   firstName: z.string().min(1, "กรุณาระบุชื่อ"),
   lastName: z.string().min(1, "กรุณาระบุนามสกุล"),
   dateOfBirth: z
     .string()
-    .regex(/^\d{4}-\d{2}-\d{2}$/, "รูปแบบวันเกิดต้องเป็น YYYY-MM-DD"),
+    .min(1, "กรุณาระบุวันเดือนปีเกิด")
+    .refine((val) => parseThaiDateToCE(val) !== null, {
+      message: "รูปแบบวันเกิดไม่ถูกต้อง (เช่น 2538-05-15 หรือ 15/05/2538)",
+    }),
   departmentId: z.string().optional(),
   positionId: z.string().optional(),
   shiftId: z.string().optional(),
@@ -138,7 +143,7 @@ export async function createEmployeeAdminAction(
           employeeCode: data.employeeCode,
           firstName: data.firstName,
           lastName: data.lastName,
-          dateOfBirth: new Date(data.dateOfBirth),
+          dateOfBirth: parseThaiDateToCE(data.dateOfBirth)!,
           departmentId: data.departmentId || null,
           positionId: data.positionId || null,
           shiftId: data.shiftId || null,
@@ -270,7 +275,7 @@ export async function updateEmployeeAdminAction(
         data: {
           firstName: data.firstName,
           lastName: data.lastName,
-          dateOfBirth: new Date(data.dateOfBirth),
+          dateOfBirth: parseThaiDateToCE(data.dateOfBirth)!,
           departmentId: data.departmentId || null,
           positionId: data.positionId || null,
           shiftId: data.shiftId || null,

@@ -7,9 +7,21 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function SystemAdminApiKeysPage() {
-  const keys = await prisma.apiKey.findMany({
-    orderBy: { createdAt: "desc" },
-  });
+  const [keys, companies] = await Promise.all([
+    prisma.apiKey.findMany({
+      include: {
+        company: {
+          select: { id: true, name: true, code: true },
+        },
+      },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.company.findMany({
+      where: { status: "ACTIVE" },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   const serializedKeys: SerializedApiKey[] = keys.map((k) => ({
     id: k.id,
@@ -20,7 +32,8 @@ export default async function SystemAdminApiKeysPage() {
     expiresAt: k.expiresAt ? k.expiresAt.toISOString() : null,
     isRevoked: k.isRevoked,
     createdAt: k.createdAt.toISOString(),
+    company: k.company,
   }));
 
-  return <ApiKeysView apiKeys={serializedKeys} />;
+  return <ApiKeysView apiKeys={serializedKeys} availableCompanies={companies} />;
 }

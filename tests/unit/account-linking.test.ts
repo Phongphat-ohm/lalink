@@ -32,13 +32,23 @@ describe("Phase 5: LINE LIFF Account Linking & Security", () => {
       const result = accountLinkingSchema.safeParse({
         companyCode: "DEMO",
         employeeCode: "EMP-001",
-        dateOfBirth: "15/05/1995", // Wrong format
+        dateOfBirth: "invalid-date-format",
       });
 
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error.flatten().fieldErrors.dateOfBirth).toBeDefined();
       }
+    });
+
+    it("should accept Buddhist Era Date of Birth", () => {
+      const result = accountLinkingSchema.safeParse({
+        companyCode: "DEMO",
+        employeeCode: "EMP-001",
+        dateOfBirth: "2538-05-15",
+      });
+
+      expect(result.success).toBe(true);
     });
 
     it("should normalize company and employee codes to uppercase", () => {

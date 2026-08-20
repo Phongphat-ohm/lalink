@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normalizeDateInput } from "@/lib/utils/date";
 
 export const accountLinkingSchema = z.object({
   companyCode: z.string().min(1, "กรุณาระบุรหัสบริษัท").trim().toUpperCase(),
@@ -6,10 +7,9 @@ export const accountLinkingSchema = z.object({
   dateOfBirth: z
     .string()
     .min(1, "กรุณาระบุวันเดือนปีเกิด")
-    .regex(
-      /^\d{4}-\d{2}-\d{2}$/,
-      "รูปแบบวันเกิดต้องเป็น ปี-เดือน-วัน (เช่น 1995-05-15)",
-    ),
+    .refine((val) => normalizeDateInput(val) !== null, {
+      message: "รูปแบบวันเกิดไม่ถูกต้อง (เช่น 2538-05-15 หรือ 15/05/2538)",
+    }),
   lineIdToken: z.string().optional(),
 });
 

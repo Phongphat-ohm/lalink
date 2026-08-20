@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
+import { ThaiDateInput } from "@/components/ui/thai-date-input";
+import { formatThaiDate } from "@/lib/utils/date";
 import {
   Dialog,
   DialogContent,
@@ -575,14 +577,12 @@ export function EmployeeTable({
               {/* Date of Birth */}
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-[#0d253d]">
-                  วัน/เดือน/ปี เกิด <span className="text-[#ea2261]">*</span>
+                  วัน/เดือน/ปี เกิด (พ.ศ.) <span className="text-[#ea2261]">*</span>
                 </label>
-                <div className="relative w-full min-w-0">
-                  <input
-                    type="date"
+                <div className="w-full min-w-0">
+                  <ThaiDateInput
                     name="dateOfBirth"
                     required
-                    className="date-input-fixed block w-full rounded-xl border border-[#a8c3de]/60 bg-white px-3.5 py-2 text-xs text-[#0d253d] focus:border-[#533afd] focus:outline-none focus:ring-2 focus:ring-[#533afd]/20"
                   />
                 </div>
               </div>
@@ -924,15 +924,13 @@ export function EmployeeTable({
 
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-[#0d253d]">
-                    วัน/เดือน/ปี เกิด <span className="text-[#ea2261]">*</span>
+                    วัน/เดือน/ปี เกิด (พ.ศ.) <span className="text-[#ea2261]">*</span>
                   </label>
-                  <div className="relative w-full min-w-0">
-                    <input
-                      type="date"
+                  <div className="w-full min-w-0">
+                    <ThaiDateInput
                       name="dateOfBirth"
                       required
                       defaultValue={editTarget.dateOfBirth.slice(0, 10)}
-                      className="date-input-fixed block w-full rounded-xl border border-[#a8c3de]/60 bg-white px-3.5 py-2 text-xs text-[#0d253d] focus:border-[#533afd] focus:outline-none focus:ring-2 focus:ring-[#533afd]/20"
                     />
                   </div>
                 </div>

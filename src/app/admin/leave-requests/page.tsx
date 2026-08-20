@@ -19,6 +19,7 @@ export default async function AdminLeaveRequestsPage() {
         },
         leaveType: true,
         leaveApprovals: { orderBy: { stepOrder: "asc" } },
+        attachments: { orderBy: { createdAt: "desc" } },
       },
     }),
     prisma.employee.findMany({
@@ -54,6 +55,13 @@ export default async function AdminLeaveRequestsPage() {
       comment: a.comment,
       approverId: a.approverId,
       actedAt: a.actedAt ? a.actedAt.toISOString() : null,
+    })),
+    attachments: req.attachments.map((att) => ({
+      id: att.id,
+      originalName: att.originalName,
+      mimeType: att.mimeType,
+      size: att.size,
+      createdAt: att.createdAt.toISOString(),
     })),
     employee: {
       id: req.employee.id,

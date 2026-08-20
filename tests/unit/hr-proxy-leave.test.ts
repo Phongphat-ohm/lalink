@@ -51,6 +51,7 @@ vi.mock("@/lib/database", () => ({
     holiday: {
       findFirst: vi.fn(),
       create: vi.fn(),
+      findMany: vi.fn().mockResolvedValue([]),
     },
     auditLog: {
       create: vi.fn(),

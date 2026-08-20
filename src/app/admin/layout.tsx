@@ -17,7 +17,12 @@ export default async function AdminLayout({
 
   const company = await prisma.company.findUnique({
     where: { id: session.companyId },
-    select: { name: true, code: true },
+    select: {
+      name: true,
+      code: true,
+      enableApi: true,
+      enableWebhook: true,
+    },
   });
 
   return (
@@ -26,6 +31,8 @@ export default async function AdminLayout({
       userRole={session.role}
       companyName={company?.name || "LALINK"}
       companyCode={company?.code || "DEMO"}
+      enableApi={company?.enableApi ?? true}
+      enableWebhook={company?.enableWebhook ?? true}
     >
       {children}
     </AdminSidebarLayout>

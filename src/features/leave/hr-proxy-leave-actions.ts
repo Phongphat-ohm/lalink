@@ -4,6 +4,7 @@ import { prisma } from "@/lib/database";
 import { requireTenantContext } from "@/lib/tenant";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions/rbac";
 import { AuditLogger } from "@/lib/audit";
+import { parseThaiDateToCE } from "@/lib/utils/date";
 import { LeaveRequestStatus, LeavePeriod, Prisma } from "@prisma/client";
 import { calculateLeaveDays } from "@/lib/leave/calculator";
 import { revalidatePath } from "next/cache";
@@ -43,10 +44,10 @@ export async function createLeaveRequestByHrAction(
       return { success: false, message: "ไม่พบประเภทการลา" };
     }
 
-    const startDate = new Date(startDateStr);
-    const endDate = new Date(endDateStr);
+    const startDate = parseThaiDateToCE(startDateStr);
+    const endDate = parseThaiDateToCE(endDateStr);
 
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    if (!startDate || !endDate || isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
       return { success: false, message: "รูปแบบวันที่ไม่ถูกต้อง" };
     }
     if (endDate < startDate) {

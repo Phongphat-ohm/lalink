@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { ThaiDatePicker } from "@/components/ui/thai-date-picker";
 import { createLeaveRequestAction } from "@/features/leave";
 import {
   FileText,
@@ -101,27 +102,39 @@ export function LeaveForm({ leaveTypes }: LeaveFormProps) {
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setIsLoading(true);
-    setErrorMessage(null);
-    setFieldErrors({});
+    try {
+      const formData = new FormData(event.currentTarget);
+      const result = await createLeaveRequestAction(null, formData);
 
-    const formData = new FormData(event.currentTarget);
-    const result = await createLeaveRequestAction(null, formData);
+      setIsLoading(false);
 
-    setIsLoading(false);
-
-    if (!result.success) {
-      setErrorMessage(result.message || "เกิดข้อผิดพลาดในการยื่นใบลา");
-      if (result.errors) {
-        setFieldErrors(result.errors);
+      if (!result.success) {
+        setErrorMessage(result.message || "เกิดข้อผิดพลาดในการยื่นใบลา");
+        if (result.errors) {
+          setFieldErrors(result.errors);
+        }
+        return;
       }
-      return;
-    }
 
-    setIsSuccess(true);
-    setTimeout(() => {
-      router.push("/liff/history");
-    }, 1200);
+      setIsSuccess(true);
+      setTimeout(() => {
+        router.push("/liff/history");
+      }, 1200);
+    } catch (error: any) {
+      setIsLoading(false);
+      const errMsg = error?.message || String(error);
+      if (
+        errMsg.includes("Body exceeded") ||
+        errMsg.includes("413") ||
+        errMsg.includes("limit")
+      ) {
+        setErrorMessage(
+          "ขนาดไฟล์เกินกำหนด (สูงสุด 5 MB) กรุณาเลือกไฟล์ใหม่หรือลดขนาดไฟล์แล้วลองอัปโหลดใหม่อีกครั้ง",
+        );
+      } else {
+        setErrorMessage("เกิดข้อผิดพลาดในการส่งข้อมูล กรุณาลองใหม่อีกครั้ง");
+      }
+    }
   }
 
   return (
@@ -203,22 +216,20 @@ export function LeaveForm({ leaveTypes }: LeaveFormProps) {
                   className="flex items-center text-xs font-semibold text-[#0d253d]"
                 >
                   <Calendar className="mr-1 h-3.5 w-3.5 text-[#64748d]" />
-                  วันที่เริ่มต้นลา{" "}
+                  วันที่เริ่มต้นลา (พ.ศ.){" "}
                   <span className="text-[#ea2261] ml-0.5">*</span>
                 </label>
-                <div className="relative w-full min-w-0">
-                  <input
+                <div className="w-full min-w-0">
+                  <ThaiDatePicker
                     id="startDate"
                     name="startDate"
-                    type="date"
                     value={startDate}
-                    onChange={(e) => {
-                      setStartDate(e.target.value);
-                      if (e.target.value > endDate) setEndDate(e.target.value);
+                    onChange={(isoCE) => {
+                      setStartDate(isoCE);
+                      if (isoCE > endDate) setEndDate(isoCE);
                     }}
                     required
                     disabled={isLoading}
-                    className="date-input-fixed block w-full rounded-xl border border-[#a8c3de]/60 bg-white px-3.5 py-2 text-xs text-[#0d253d] focus:border-[#533afd] focus:outline-none focus:ring-2 focus:ring-[#533afd]/20"
                   />
                 </div>
                 {fieldErrors.startDate && (
@@ -235,20 +246,17 @@ export function LeaveForm({ leaveTypes }: LeaveFormProps) {
                   className="flex items-center text-xs font-semibold text-[#0d253d]"
                 >
                   <Calendar className="mr-1 h-3.5 w-3.5 text-[#64748d]" />
-                  วันที่สิ้นสุดลา{" "}
+                  วันที่สิ้นสุดลา (พ.ศ.){" "}
                   <span className="text-[#ea2261] ml-0.5">*</span>
                 </label>
-                <div className="relative w-full min-w-0">
-                  <input
+                <div className="w-full min-w-0">
+                  <ThaiDatePicker
                     id="endDate"
                     name="endDate"
-                    type="date"
                     value={endDate}
-                    min={startDate}
-                    onChange={(e) => setEndDate(e.target.value)}
+                    onChange={(isoCE) => setEndDate(isoCE)}
                     required
                     disabled={isLoading}
-                    className="date-input-fixed block w-full rounded-xl border border-[#a8c3de]/60 bg-white px-3.5 py-2 text-xs text-[#0d253d] focus:border-[#533afd] focus:outline-none focus:ring-2 focus:ring-[#533afd]/20"
                   />
                 </div>
                 {fieldErrors.endDate && (
@@ -407,6 +415,17 @@ export function LeaveForm({ leaveTypes }: LeaveFormProps) {
                   type="file"
                   name="attachment"
                   accept=".pdf,.png,.jpg,.jpeg"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f && f.size > 5 * 1024 * 1024) {
+                      setErrorMessage(
+                        `ขนาดไฟล์ "${f.name}" เกิน 5 MB (${(f.size / (1024 * 1024)).toFixed(1)} MB) กรุณาเลือกไฟล์ใหม่หรือลดขนาดไฟล์แล้วลองอัปโหลดอีกครั้ง`,
+                      );
+                      e.target.value = "";
+                    } else {
+                      setErrorMessage(null);
+                    }
+                  }}
                   className="w-full text-xs text-[#64748d] file:mr-2.5 file:py-1.5 file:px-3.5 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-[#533afd]/10 file:text-[#533afd] hover:file:bg-[#533afd]/20 cursor-pointer"
                 />
               </div>

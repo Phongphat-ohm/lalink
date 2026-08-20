@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ThaiDateInput } from "@/components/ui/thai-date-input";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useLiff } from "@/components/liff";
 import { linkAccountAction } from "@/features/employee";
@@ -514,18 +515,16 @@ export default function LiffConnectPage() {
                           className="flex items-center text-xs font-semibold text-slate-700"
                         >
                           <Calendar className="mr-1 h-3.5 w-3.5 text-slate-400" />
-                          วัน/เดือน/ปีเกิด (ค.ศ.) *
+                          วัน/เดือน/ปีเกิด (พ.ศ.) *
                         </label>
-                        <div className="relative w-full min-w-0">
-                          <Input
+                        <div className="w-full min-w-0">
+                          <ThaiDateInput
                             id="dateOfBirth"
                             name="dateOfBirth"
-                            type="date"
                             value={dateOfBirth}
-                            onChange={(e) => setDateOfBirth(e.target.value)}
+                            onChange={(isoCE) => setDateOfBirth(isoCE)}
                             required
                             disabled={isLoading}
-                            className="block h-10 w-full min-w-0 max-w-full box-border appearance-none rounded-xl px-3 py-2 text-sm leading-5 cursor-pointer"
                           />
                         </div>
                         {fieldErrors.dateOfBirth && (

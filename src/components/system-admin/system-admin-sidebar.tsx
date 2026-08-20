@@ -23,6 +23,8 @@ import {
   CreditCard,
   Sparkles,
   Mail,
+  BookOpen,
+  Webhook,
 } from "lucide-react";
 import { logoutAdminAction } from "@/features/auth";
 
@@ -55,6 +57,11 @@ export function SystemAdminSidebar({ userName }: SystemAdminSidebarProps) {
           icon: LayoutDashboard,
           exact: true,
         },
+        {
+          href: "/system-admin/health",
+          label: "สถานะระบบ (System Health)",
+          icon: Activity,
+        },
       ],
     },
     {
@@ -83,7 +90,7 @@ export function SystemAdminSidebar({ userName }: SystemAdminSidebarProps) {
       ],
     },
     {
-      title: "ผู้ใช้งาน & ไดเรกทอรี",
+      title: "ผู้ใช้งาน & บุคลากร",
       items: [
         {
           href: "/system-admin/users",
@@ -103,7 +110,7 @@ export function SystemAdminSidebar({ userName }: SystemAdminSidebarProps) {
       ],
     },
     {
-      title: "ความปลอดภัย & ตรวจสอบ",
+      title: "ความปลอดภัย & บำรุงรักษา",
       items: [
         {
           href: "/system-admin/security",
@@ -116,24 +123,29 @@ export function SystemAdminSidebar({ userName }: SystemAdminSidebarProps) {
           icon: ShieldAlert,
         },
         {
-          href: "/system-admin/api-keys",
-          label: "กุญแจเชื่อมต่อ (API Keys)",
-          icon: Key,
+          href: "/system-admin/backup",
+          label: "สำรองฐานข้อมูล (Backup)",
+          icon: Database,
         },
       ],
     },
     {
-      title: "โครงสร้างพื้นฐาน & บำรุงรักษา",
+      title: "เชื่อมต่อ & API",
       items: [
         {
-          href: "/system-admin/health",
-          label: "สถานะระบบ (System Health)",
-          icon: Activity,
+          href: "/system-admin/api-keys",
+          label: "กุญแจเชื่อมต่อ (API Keys)",
+          icon: Key,
         },
         {
-          href: "/system-admin/backup",
-          label: "สำรองฐานข้อมูล (Backup)",
-          icon: Database,
+          href: "/system-admin/webhooks",
+          label: "เว็บฮุกระบบ (Webhooks)",
+          icon: Webhook,
+        },
+        {
+          href: "/docs",
+          label: "เอกสารคู่มือ & API Docs",
+          icon: BookOpen,
         },
       ],
     },

@@ -259,6 +259,9 @@ export async function updateCompanySuperAdminAction(
     const email = formData.get("email")?.toString().trim() || null;
     const phone = formData.get("phone")?.toString().trim() || null;
     const address = formData.get("address")?.toString().trim() || null;
+    const enableLinePush = formData.get("enableLinePush") === "true";
+    const enableApi = formData.get("enableApi") === "true";
+    const enableWebhook = formData.get("enableWebhook") === "true";
 
     if (!name || name.length < 2) {
       return { success: false, message: "ชื่อบริษัทต้องมีอย่างน้อย 2 ตัวอักษร" };
@@ -272,6 +275,9 @@ export async function updateCompanySuperAdminAction(
         email,
         phone,
         address,
+        enableLinePush,
+        enableApi,
+        enableWebhook,
       },
     });
 
@@ -284,7 +290,15 @@ export async function updateCompanySuperAdminAction(
         action: "UPDATE_TENANT",
         resource: "Company",
         resourceId: updated.id,
-        details: { name: updated.name, code: updated.code, email, phone },
+        details: {
+          name: updated.name,
+          code: updated.code,
+          email,
+          phone,
+          enableLinePush,
+          enableApi,
+          enableWebhook,
+        },
       });
     } catch {
       // ignore
@@ -300,6 +314,153 @@ export async function updateCompanySuperAdminAction(
   } catch (error) {
     console.error("Update Company Error:", error);
     return { success: false, message: "เกิดข้อผิดพลาดในการอัปเดตข้อมูลบริษัท" };
+  }
+}
+
+/**
+ * Super Admin: Toggle a specific feature flag for a company (Line Push, API, Webhook)
+ */
+export async function toggleCompanyFeatureAction(
+  companyId: string,
+  feature: "enableLinePush" | "enableApi" | "enableWebhook",
+  value: boolean,
+): Promise<ActionResult> {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "SYSTEM_ADMIN") {
+      return { success: false, message: "Unauthorized: Super Admin only" };
+    }
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, name: true, code: true },
+    });
+
+    if (!company) {
+      return { success: false, message: "ไม่พบข้อมูลบริษัท" };
+    }
+
+    await prisma.company.update({
+      where: { id: companyId },
+      data: { [feature]: value },
+    });
+
+    const featureNames: Record<string, string> = {
+      enableLinePush: "LINE Push Notification",
+      enableApi: "REST API Access",
+      enableWebhook: "Webhook Access",
+    };
+
+    try {
+      const { AuditLogger } = await import("@/lib/audit");
+      await AuditLogger.log({
+        companyId: company.id,
+        actorType: "USER",
+        actorId: session.userId,
+        action: "UPDATE_TENANT_FEATURE",
+        resource: "Company",
+        resourceId: company.id,
+        details: {
+          feature,
+          value,
+          companyCode: company.code,
+        },
+      });
+    } catch {
+      // ignore
+    }
+
+    revalidatePath("/system-admin");
+    revalidatePath("/system-admin/companies");
+
+    return {
+      success: true,
+      message: `${value ? "เปิด" : "ปิด"}การใช้งาน ${featureNames[feature] || feature} สำหรับบริษัท ${company.name} เรียบร้อยแล้ว`,
+    };
+  } catch (error) {
+    console.error("Toggle Company Feature Error:", error);
+    return { success: false, message: "เกิดข้อผิดพลาดในการตั้งค่าฟังก์ชันบริษัท" };
+  }
+}
+
+/**
+ * Super Admin: Toggle Global Master Setting for LINE Push Notification
+ */
+export async function toggleGlobalLinePushAction(enabled: boolean): Promise<ActionResult> {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "SYSTEM_ADMIN") {
+      return { success: false, message: "Unauthorized: Super Admin only" };
+    }
+
+    await prisma.systemSetting.upsert({
+      where: { key: "line_push_enabled" },
+      create: {
+        category: "LINE",
+        key: "line_push_enabled",
+        value: enabled ? "true" : "false",
+        isPublic: false,
+        description: "สวิตช์หลักเปิด/ปิดการส่งข้อความแจ้งเตือนผ่าน LINE ทั่วระบบ",
+      },
+      update: {
+        value: enabled ? "true" : "false",
+      },
+    });
+
+    try {
+      const { AuditLogger } = await import("@/lib/audit");
+      await AuditLogger.log({
+        actorType: "USER",
+        actorId: session.userId,
+        action: "UPDATE_SYSTEM_SETTING",
+        resource: "SystemSetting",
+        resourceId: "line_push_enabled",
+        details: { key: "line_push_enabled", enabled },
+      });
+    } catch {
+      // ignore
+    }
+
+    revalidatePath("/system-admin");
+    revalidatePath("/system-admin/companies");
+    revalidatePath("/system-admin/security");
+
+    return {
+      success: true,
+      message: `${enabled ? "เปิด" : "ปิด"}ระบบ LINE Push Notification ทั่วทั้งระบบเรียบร้อยแล้ว`,
+    };
+  } catch (error) {
+    console.error("Toggle Global LINE Push Error:", error);
+    return { success: false, message: "เกิดข้อผิดพลาดในการตั้งค่า Global LINE Push" };
+  }
+}
+
+/**
+ * Super Admin: Get Global System Settings
+ */
+export async function getGlobalSystemSettingsAction(): Promise<
+  ActionResult<{ linePushEnabled: boolean }>
+> {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "SYSTEM_ADMIN") {
+      return { success: false, message: "Unauthorized" };
+    }
+
+    const setting = await prisma.systemSetting.findUnique({
+      where: { key: "line_push_enabled" },
+      select: { value: true },
+    });
+
+    return {
+      success: true,
+      data: {
+        linePushEnabled: setting ? setting.value !== "false" : true,
+      },
+    };
+  } catch (error) {
+    console.error("Get Global Settings Error:", error);
+    return { success: false, message: "เกิดข้อผิดพลาดในการดึงข้อมูลการตั้งค่า" };
   }
 }
 
@@ -368,6 +529,9 @@ export async function getCompanyDetailAction(companyId: string): Promise<
     phone: string | null;
     address: string | null;
     status: string;
+    enableLinePush: boolean;
+    enableApi: boolean;
+    enableWebhook: boolean;
     createdAt: string;
     employeesCount: number;
     usersCount: number;
@@ -408,6 +572,9 @@ export async function getCompanyDetailAction(companyId: string): Promise<
         phone: company.phone,
         address: company.address,
         status: company.status,
+        enableLinePush: company.enableLinePush,
+        enableApi: company.enableApi,
+        enableWebhook: company.enableWebhook,
         createdAt: company.createdAt.toISOString(),
         employeesCount: company._count.employees,
         usersCount: company._count.users,

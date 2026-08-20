@@ -1,6 +1,7 @@
 "use server";
 
 import { createLeaveRequestSchema, cancelLeaveRequestSchema } from "./schemas";
+import { parseThaiDateToCE } from "@/lib/utils/date";
 import { prisma } from "@/lib/database";
 import {
   requireTenantContext,
@@ -15,6 +16,13 @@ import { resolveEffectiveWorkSchedule } from "@/lib/leave/work-schedule";
 import { resolveLeaveYear } from "@/lib/leave/leave-year";
 import { initializeApprovals } from "@/lib/leave/approval-engine";
 import { NotificationService } from "@/lib/notification";
+import {
+  storageService,
+  validateUploadFile,
+  sanitizeFilename,
+  generateLeaveAttachmentKey,
+} from "@/lib/storage";
+import crypto from "crypto";
 import { LeavePeriod, LeaveRequestStatus, ActorType } from "@prisma/client";
 
 import type { ActionResult } from "@/lib/types";
@@ -67,8 +75,8 @@ export async function createLeaveRequestAction(
       hours,
       reason,
     } = validated.data;
-    const startObj = new Date(startDate);
-    const endObj = new Date(endDate);
+    const startObj = parseThaiDateToCE(startDate)!;
+    const endObj = parseThaiDateToCE(endDate)!;
     const leaveYear = await resolveLeaveYear(tenant.companyId, startObj);
     const requestYear = leaveYear.year;
 
@@ -171,7 +179,76 @@ export async function createLeaveRequestAction(
       }
     }
 
-    // 6. Generate Sequential Request Number (e.g. LR-202608-0001)
+    // 6. Attachment Validation & Storage Upload
+    const attachmentFile = (formData.get("attachment") || formData.get("file")) as File | null;
+    const requiredDays = leaveType.attachmentRequiredDays ? Number(leaveType.attachmentRequiredDays) : 1;
+    if (leaveType.requireAttachment && totalLeaveDays >= requiredDays) {
+      if (!attachmentFile || attachmentFile.size === 0) {
+        return {
+          success: false,
+          message: `การลาประเภท "${leaveType.name}" ตั้งแต่ ${requiredDays} วันขึ้นไป จำเป็นต้องแนบเอกสารหรือใบรับรองแพทย์`,
+        };
+      }
+    }
+
+    let attachmentData: {
+      originalName: string;
+      objectKey: string;
+      mimeType: string;
+      size: number;
+      bucket: string;
+      checksum: string;
+    } | null = null;
+
+    if (attachmentFile && attachmentFile.size > 0) {
+      const arrayBuffer = await attachmentFile.arrayBuffer();
+      const buffer = new Uint8Array(arrayBuffer);
+      const rawFilename = attachmentFile.name || "attachment";
+      const validation = validateUploadFile(rawFilename, buffer, attachmentFile.type);
+
+      if (!validation.isValid) {
+        return {
+          success: false,
+          message: validation.error || "ไฟล์เอกสารแนบไม่ผ่านการตรวจสอบความปลอดภัย",
+        };
+      }
+
+      const safeName = sanitizeFilename(rawFilename);
+      const fileId = crypto.randomUUID();
+      const extension = validation.extension || "pdf";
+
+      const objectKey = generateLeaveAttachmentKey({
+        companyId: tenant.companyId,
+        employeeId: tenant.employeeId!,
+        leaveRequestId: "req_" + fileId.slice(0, 8),
+        fileId,
+        extension,
+      });
+
+      const uploadResult = await storageService.upload({
+        key: objectKey,
+        buffer,
+        contentType: validation.mimeType || attachmentFile.type,
+        metadata: {
+          companyId: tenant.companyId,
+          employeeId: tenant.employeeId!,
+          originalName: encodeURIComponent(safeName),
+        },
+      });
+
+      const checksum = crypto.createHash("sha256").update(buffer).digest("hex");
+
+      attachmentData = {
+        originalName: safeName,
+        objectKey,
+        mimeType: validation.mimeType || attachmentFile.type,
+        size: buffer.byteLength,
+        bucket: uploadResult.bucket,
+        checksum,
+      };
+    }
+
+    // 7. Generate Sequential Request Number (e.g. LR-202608-0001)
     const countThisMonth = await prisma.leaveRequest.count({
       where: {
         companyId: tenant.companyId,
@@ -187,7 +264,7 @@ export async function createLeaveRequestAction(
 
     let createdRequestId: string | null = null;
 
-    // 7. Atomic Database Transaction: Create Request & Deduct Balance
+    // 8. Atomic Database Transaction: Create Request & Deduct Balance
     await prisma.$transaction(async (tx) => {
       // Create Leave Request
       const createdRequest = await tx.leaveRequest.create({
@@ -208,6 +285,23 @@ export async function createLeaveRequestAction(
       });
 
       createdRequestId = createdRequest.id;
+
+      // Create Attachment Record if uploaded
+      if (attachmentData) {
+        await tx.leaveAttachment.create({
+          data: {
+            companyId: tenant.companyId,
+            leaveRequestId: createdRequest.id,
+            uploadedBy: tenant.employeeId!,
+            originalName: attachmentData.originalName,
+            objectKey: attachmentData.objectKey,
+            mimeType: attachmentData.mimeType,
+            size: attachmentData.size,
+            bucket: attachmentData.bucket,
+            checksum: attachmentData.checksum,
+          },
+        });
+      }
 
       // Initialize multi-level approval steps (if workflow configured)
       await initializeApprovals(tx, {
@@ -243,6 +337,7 @@ export async function createLeaveRequestAction(
             hours: isHourly ? Number(hours) : null,
             startDate: startObj.toISOString(),
             endDate: endObj.toISOString(),
+            hasAttachment: !!attachmentData,
           },
         },
       });
