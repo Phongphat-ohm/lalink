@@ -5,6 +5,7 @@ import {
   LeaveBalanceView,
   SerializedBalanceEmployee,
   SerializedLeaveTypeOption,
+  SerializedDepartmentOption,
 } from "@/components/admin/leave-balance-view";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export default async function AdminLeaveBalancePage() {
   const { companyId } = await requireAdminPermission(PERMISSIONS.POLICY_MANAGE);
   const currentYear = new Date().getFullYear();
 
-  const [employees, leaveTypes] = await Promise.all([
+  const [employees, leaveTypes, departments] = await Promise.all([
     prisma.employee.findMany({
       where: { companyId },
       include: {
@@ -29,6 +30,11 @@ export default async function AdminLeaveBalancePage() {
     prisma.leaveType.findMany({
       where: { companyId, isActive: true },
       select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" },
+    }),
+    prisma.department.findMany({
+      where: { companyId },
+      select: { id: true, name: true },
       orderBy: { name: "asc" },
     }),
   ]);
@@ -62,10 +68,13 @@ export default async function AdminLeaveBalancePage() {
     }),
   );
 
+  const serializedDepartments: SerializedDepartmentOption[] = departments;
+
   return (
     <LeaveBalanceView
       employees={serializedEmployees}
       leaveTypes={serializedLeaveTypes}
+      departments={serializedDepartments}
       currentYear={currentYear}
     />
   );

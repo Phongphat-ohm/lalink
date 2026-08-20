@@ -20,6 +20,8 @@ import {
   Database,
   Key,
   UserRound,
+  CreditCard,
+  Sparkles,
 } from "lucide-react";
 import { logoutAdminAction } from "@/features/auth";
 
@@ -42,6 +44,18 @@ export function SystemAdminSidebar({ userName }: SystemAdminSidebarProps) {
       href: "/system-admin/companies",
       label: "จัดการองค์กร (Tenants)",
       icon: Building2,
+      exact: false,
+    },
+    {
+      href: "/system-admin/plans",
+      label: "แพ็กเกจ SaaS (Plans)",
+      icon: CreditCard,
+      exact: false,
+    },
+    {
+      href: "/system-admin/subscriptions",
+      label: "การสมัครสมาชิก (Subscriptions)",
+      icon: Sparkles,
       exact: false,
     },
     {

@@ -114,10 +114,10 @@
 | **Phase 11** | Security Hardening, PDPA & Privacy | ✅ **Done** | Security Headers, CSP, PII Anonymization, Rate Limiter |
 | **Phase 12** | Comprehensive Automated Testing Suite | ✅ **Done** | 22 Test Files / 189 Tests Passed 100% |
 | **Phase 13** | Production Readiness, Docker & Deployment | ✅ **Done** | Multi-stage Dockerfile, docker-compose, Health Check, Docs |
-| **Phase 14** | **System Admin Enterprise CRUDs & Subscriptions** | ⏳ **Next** | Plans CRUD, Subscriptions CRUD, Entitlement Guard, Company/User Edit, Super Admin Employee Actions |
-| **Phase 15** | **System Admin Operations, Real Health & Security** | ⏳ **Next** | Real Database Snapshot Backup & Download, Real Health Checks (S3/LINE/Memory), IP Blocklist |
-| **Phase 16** | **Company Admin & HR CRUD Enhancements** | ⏳ **Next** | HR Proxy Leave Submission & Revocation, Holiday Auto-Import, Batch Balance Adjustment |
-| **Phase 17** | **Comprehensive Testing & Final Quality Gate** | ⏳ **Next** | Automated Test Suites for New CRUDs, 100% Quality Gate |
+| **Phase 14** | **System Admin Enterprise CRUDs & Subscriptions** | ✅ **Done** | Plans CRUD, Subscriptions CRUD, Entitlement Guard, Company/User Edit, Super Admin Employee Actions |
+| **Phase 15** | **System Admin Operations, Real Health & Security** | ✅ **Done** | Real Database Snapshot Backup & Download, Real Health Checks (S3/LINE/Memory), IP Blocklist |
+| **Phase 16** | **Company Admin & HR CRUD Enhancements** | ✅ **Done** | HR Proxy Leave Submission & Revocation, Holiday Auto-Import, Batch Balance Adjustment |
+| **Phase 17** | **Comprehensive Testing & Final Quality Gate** | ✅ **Done** | 24 Automated Test Suites (206 Tests), 100% Quality Gate Passed |
 
 ---
 

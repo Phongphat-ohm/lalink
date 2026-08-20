@@ -63,9 +63,9 @@ export async function superAdminRevokeSessionAction(
 }
 
 /**
- * Super Admin: Trigger Database Backup
+ * Super Admin: Trigger Real Database Backup
  */
-export async function triggerDatabaseBackupAction(): Promise<ActionResult> {
+export async function triggerDatabaseBackupAction(): Promise<ActionResult<{ backupId: string; filename: string }>> {
   try {
     const session = await getSession();
     if (!session || session.role !== "SYSTEM_ADMIN") {
@@ -75,21 +75,8 @@ export async function triggerDatabaseBackupAction(): Promise<ActionResult> {
       };
     }
 
-    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `lalink_backup_${timestamp}.sql.gz`;
-    const randomBytes = Math.floor(Math.random() * 2000000) + 1500000; // ~1.5MB - 3.5MB simulated
-    const checksum = crypto.randomBytes(16).toString("hex");
-
-    const backupLog = await prisma.backupLog.create({
-      data: {
-        filename,
-        sizeBytes: BigInt(randomBytes),
-        status: "COMPLETED",
-        triggerType: "MANUAL",
-        checksum,
-        completedAt: new Date(),
-      },
-    });
+    const { BackupService } = await import("@/lib/backup/backup-service");
+    const { backupLog } = await BackupService.createDatabaseBackup("MANUAL");
 
     await AuditLogger.log({
       actorType: "USER",
@@ -97,14 +84,15 @@ export async function triggerDatabaseBackupAction(): Promise<ActionResult> {
       action: "DATABASE_BACKUP",
       resource: "BackupLog",
       resourceId: backupLog.id,
-      details: { filename: backupLog.filename, triggerType: "MANUAL" },
+      details: { filename: backupLog.filename, sizeBytes: Number(backupLog.sizeBytes), triggerType: "MANUAL" },
     });
 
     revalidatePath("/system-admin/backup");
 
     return {
       success: true,
-      message: `สร้างสำรองฐานข้อมูล "${filename}" สำเร็จเรียบร้อยแล้ว`,
+      message: `สร้างไฟล์สำรองฐานข้อมูลจริง "${backupLog.filename}" สำเร็จเรียบร้อยแล้ว`,
+      data: { backupId: backupLog.id, filename: backupLog.filename },
     };
   } catch (error) {
     console.error("Trigger Backup Error:", error);

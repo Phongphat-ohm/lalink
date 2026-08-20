@@ -4,20 +4,34 @@ import { PERMISSIONS } from "@/lib/permissions/rbac";
 import { LeaveRequestsTable } from "@/components/admin/leave-requests-table";
 import { Badge } from "@/components/ui/badge";
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminLeaveRequestsPage() {
   const { companyId } = await requireAdminPermission(PERMISSIONS.LEAVE_APPROVE);
 
-  const leaveRequests = await prisma.leaveRequest.findMany({
-    where: { companyId },
-    orderBy: { createdAt: "desc" },
-    include: {
-      employee: {
-        include: { department: true, position: true },
+  const [leaveRequests, employees, leaveTypes] = await Promise.all([
+    prisma.leaveRequest.findMany({
+      where: { companyId },
+      orderBy: { createdAt: "desc" },
+      include: {
+        employee: {
+          include: { department: true, position: true },
+        },
+        leaveType: true,
+        leaveApprovals: { orderBy: { stepOrder: "asc" } },
       },
-      leaveType: true,
-      leaveApprovals: { orderBy: { stepOrder: "asc" } },
-    },
-  });
+    }),
+    prisma.employee.findMany({
+      where: { companyId, status: { in: ["ACTIVE", "PROBATION"] } },
+      select: { id: true, firstName: true, lastName: true, employeeCode: true },
+      orderBy: { firstName: "asc" },
+    }),
+    prisma.leaveType.findMany({
+      where: { companyId, isActive: true },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" },
+    }),
+  ]);
 
   const serializedRequests = leaveRequests.map((req) => ({
     id: req.id,
@@ -71,8 +85,7 @@ export default async function AdminLeaveRequestsPage() {
             รายการคำขอและการอนุมัติใบลา
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
-            คลิกที่รายการเพื่อดูรายละเอียดแบบเต็ม
-            หรือดำเนินการอนุมัติ/ไม่อนุมัติผ่าน Dialog
+            คลิกที่รายการเพื่อดูรายละเอียดแบบเต็ม ดำเนินการอนุมัติ/ไม่อนุมัติ หรือยื่นใบลาแทนพนักงาน
           </p>
         </div>
         <Badge
@@ -83,7 +96,11 @@ export default async function AdminLeaveRequestsPage() {
         </Badge>
       </div>
 
-      <LeaveRequestsTable initialRequests={serializedRequests} />
+      <LeaveRequestsTable
+        initialRequests={serializedRequests}
+        availableEmployees={employees}
+        availableLeaveTypes={leaveTypes}
+      />
     </div>
   );
 }

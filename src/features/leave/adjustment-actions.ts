@@ -155,3 +155,125 @@ export async function adjustLeaveBalanceAction(
     };
   }
 }
+
+/**
+ * HR / Admin: Batch Adjust Leave Balance for multiple employees (by Department or entire company)
+ */
+export async function batchAdjustLeaveBalanceAction(
+  departmentId: string | null,
+  leaveTypeId: string,
+  adjustmentDays: number,
+  reason: string,
+  year: number = new Date().getFullYear(),
+): Promise<ActionResult<{ adjustedCount: number }>> {
+  try {
+    const session = await getSession();
+    if (!session || !session.companyId) {
+      return { success: false, message: "Unauthorized" };
+    }
+
+    if (adjustmentDays === 0) {
+      return { success: false, message: "จำนวนวันปรับปรุงต้องไม่เป็น 0" };
+    }
+
+    const employees = await prisma.employee.findMany({
+      where: {
+        companyId: session.companyId,
+        status: { in: ["ACTIVE", "PROBATION"] },
+        ...(departmentId ? { departmentId } : {}),
+      },
+      select: { id: true, firstName: true, lastName: true },
+    });
+
+    if (employees.length === 0) {
+      return { success: false, message: "ไม่พบพนักงานที่เข้าเกณฑ์การปรับปรุงยอดวันลา" };
+    }
+
+    const leaveType = await prisma.leaveType.findUnique({
+      where: { id: leaveTypeId },
+    });
+
+    if (!leaveType) {
+      return { success: false, message: "ไม่พบประเภทวันลา" };
+    }
+
+    let adjustedCount = 0;
+    for (const emp of employees) {
+      await prisma.$transaction(async (tx) => {
+        let balance = await tx.leaveBalance.findUnique({
+          where: {
+            employeeId_leaveTypeId_year: {
+              employeeId: emp.id,
+              leaveTypeId,
+              year,
+            },
+          },
+        });
+
+        if (!balance) {
+          balance = await tx.leaveBalance.create({
+            data: {
+              companyId: session.companyId!,
+              employeeId: emp.id,
+              leaveTypeId,
+              year,
+              allocatedDays: leaveType.defaultDays,
+              remainingDays: leaveType.defaultDays,
+            },
+          });
+        }
+
+        const balanceBefore = Number(balance.remainingDays);
+        const balanceAfter = Math.max(0, balanceBefore + adjustmentDays);
+
+        await tx.leaveBalance.update({
+          where: { id: balance.id },
+          data: {
+            remainingDays: new Prisma.Decimal(balanceAfter),
+          },
+        });
+
+        await tx.leaveTransaction.create({
+          data: {
+            companyId: session.companyId!,
+            employeeId: emp.id,
+            leaveTypeId,
+            type: "ADJUSTMENT",
+            days: new Prisma.Decimal(adjustmentDays),
+            balanceBefore: new Prisma.Decimal(balanceBefore),
+            balanceAfter: new Prisma.Decimal(balanceAfter),
+            reason: `[BATCH]: ${reason}`,
+            createdBy: session.userId,
+          },
+        });
+      });
+      adjustedCount++;
+    }
+
+    await AuditLogger.log({
+      companyId: session.companyId,
+      actorType: "USER",
+      actorId: session.userId,
+      action: "BATCH_ADJUST_LEAVE_BALANCE",
+      resource: "LeaveBalance",
+      details: {
+        departmentId: departmentId || "ALL_DEPARTMENTS",
+        leaveTypeId,
+        adjustmentDays,
+        reason,
+        adjustedCount,
+      },
+    });
+
+    revalidatePath("/admin/leave-balance");
+
+    return {
+      success: true,
+      message: `ปรับปรุงยอดวันลาแบบกลุ่มให้พนักงาน ${adjustedCount} ท่านสำเร็จเรียบร้อยแล้ว`,
+      data: { adjustedCount },
+    };
+  } catch (error: any) {
+    console.error("Batch Adjust Leave Balance Error:", error);
+    return { success: false, message: error.message || "เกิดข้อผิดพลาดในการปรับปรุงยอดวันลาแบบกลุ่ม" };
+  }
+}

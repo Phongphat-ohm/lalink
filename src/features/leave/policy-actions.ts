@@ -340,3 +340,77 @@ export async function addHolidayAction(
     };
   }
 }
+
+/**
+ * Server action to automatically import Thai Official Public Holidays for a specific year.
+ */
+export async function importOfficialHolidaysAction(year: number = new Date().getFullYear()): Promise<ActionResult<{ count: number }>> {
+  try {
+    const tenant = await requireTenantContext();
+    if (!hasPermission(tenant.role, PERMISSIONS.HOLIDAY_MANAGE)) {
+      return { success: false, message: "คุณไม่มีสิทธิ์ในการจัดการวันหยุดบริษัท" };
+    }
+
+    const thaiPublicHolidays = [
+      { name: "วันขึ้นปีใหม่", date: `${year}-01-01` },
+      { name: "วันจักรี", date: `${year}-04-06` },
+      { name: "วันสงกรานต์ (วันผู้สูงอายุ)", date: `${year}-04-13` },
+      { name: "วันสงกรานต์ (วันครอบครัว)", date: `${year}-04-14` },
+      { name: "วันสงกรานต์", date: `${year}-04-15` },
+      { name: "วันแรงงานแห่งชาติ", date: `${year}-05-01` },
+      { name: "วันฉัตรมงคล", date: `${year}-05-04` },
+      { name: "วันเฉลิมพระชนมพรรษาสมเด็จพระบรมราชินี", date: `${year}-06-03` },
+      { name: "วันเฉลิมพระชนมพรรษาพระบาทสมเด็จพระเจ้าอยู่หัว", date: `${year}-07-28` },
+      { name: "วันแม่แห่งชาติ", date: `${year}-08-12` },
+      { name: "วันนวมินทรมหาราช", date: `${year}-10-13` },
+      { name: "วันปิยมหาราช", date: `${year}-10-23` },
+      { name: "วันชาติ และวันพ่อแห่งชาติ", date: `${year}-12-05` },
+      { name: "วันรัฐธรรมนูญ", date: `${year}-12-10` },
+      { name: "วันสิ้นปี", date: `${year}-12-31` },
+    ];
+
+    let createdCount = 0;
+    for (const h of thaiPublicHolidays) {
+      const dateObj = new Date(h.date);
+      const existing = await prisma.holiday.findFirst({
+        where: {
+          companyId: tenant.companyId,
+          date: dateObj,
+        },
+      });
+
+      if (!existing) {
+        await prisma.holiday.create({
+          data: {
+            companyId: tenant.companyId,
+            name: h.name,
+            date: dateObj,
+            year,
+          },
+        });
+        createdCount++;
+      }
+    }
+
+    await prisma.auditLog.create({
+      data: {
+        companyId: tenant.companyId,
+        actorType: ActorType.USER,
+        actorId: tenant.userId,
+        action: "IMPORT_THAI_HOLIDAYS",
+        resource: "Holiday",
+        details: { year, importedCount: createdCount },
+      },
+    });
+
+    return {
+      success: true,
+      message: `นำเข้าวันหยุดนักขัตฤกษ์ไทยประจำปี ${year} สำเร็จจำนวน ${createdCount} วัน`,
+      data: { count: createdCount },
+    };
+  } catch (error) {
+    console.error("Import Holidays Error:", error);
+    return { success: false, message: "เกิดข้อผิดพลาดในการนำเข้าวันหยุดนักขัตฤกษ์" };
+  }
+}
+

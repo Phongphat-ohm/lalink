@@ -121,16 +121,15 @@ export function BackupView({ backups }: BackupViewProps) {
                     Checksum (SHA256)
                   </th>
                   <th className="py-3.5 px-4 font-semibold">สถานะ</th>
-                  <th className="py-3.5 px-4 pr-5 font-semibold">
-                    วัน-เวลาที่สร้าง
-                  </th>
+                  <th className="py-3.5 px-4 font-semibold">วัน-เวลาที่สร้าง</th>
+                  <th className="py-3.5 px-4 pr-5 text-right font-semibold">ดาวน์โหลด</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e3e8ee]/70 font-mono">
                 {backups.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={6}
+                      colSpan={7}
                       className="py-12 text-center text-[#64748d] font-sans"
                     >
                       ยังไม่มีประวัติการสำรองฐานข้อมูล กดปุ่ม
@@ -146,7 +145,7 @@ export function BackupView({ backups }: BackupViewProps) {
                       <td className="py-3.5 px-4 pl-5 font-bold text-[#0d253d] font-sans">
                         <div className="flex items-center space-x-2">
                           <HardDrive className="h-4 w-4 text-[#533afd] shrink-0" />
-                          <span className="font-mono">{b.filename}</span>
+                          <span className="font-mono text-xs">{b.filename}</span>
                         </div>
                       </td>
                       <td className="py-3.5 px-4 text-[#64748d]">
@@ -175,8 +174,17 @@ export function BackupView({ backups }: BackupViewProps) {
                           {b.status}
                         </Badge>
                       </td>
-                      <td className="py-3.5 px-4 pr-5 text-[#64748d] tabular-nums whitespace-nowrap">
+                      <td className="py-3.5 px-4 text-[#64748d] tabular-nums whitespace-nowrap text-xs">
                         {new Date(b.createdAt).toLocaleString("th-TH")}
+                      </td>
+                      <td className="py-3.5 px-4 pr-5 text-right font-sans">
+                        <a
+                          href={`/api/system-admin/backup/${b.id}/download`}
+                          download={b.filename}
+                          className="inline-flex items-center justify-center h-7 px-3 text-xs font-semibold rounded-full bg-[#533afd]/10 text-[#533afd] hover:bg-[#533afd] hover:text-white transition-colors"
+                        >
+                          <Download className="h-3 w-3 mr-1" /> ดาวน์โหลด
+                        </a>
                       </td>
                     </tr>
                   ))

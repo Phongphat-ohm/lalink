@@ -134,13 +134,32 @@ export function HolidayView({
           </p>
         </div>
 
-        <Button
-          onClick={() => setIsAddModalOpen(true)}
-          className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] h-9 text-xs font-semibold px-4"
-        >
-          <Plus className="h-4 w-4 mr-1.5" />
-          เพิ่มวันหยุด
-        </Button>
+        <div className="flex items-center space-x-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={async () => {
+              const { importOfficialHolidaysAction } = await import("@/features/leave");
+              const res = await importOfficialHolidaysAction(year);
+              if (res.success) {
+                alert(res.message);
+                router.refresh();
+              } else {
+                alert(res.message || "เกิดข้อผิดพลาด");
+              }
+            }}
+            className="rounded-full border-[#e3e8ee] hover:bg-[#533afd]/10 text-[#533afd] h-9 text-xs font-semibold px-4"
+          >
+            <CalendarDays className="h-4 w-4 mr-1.5" /> โหลดวันหยุดนักขัตฤกษ์ไทย
+          </Button>
+
+          <Button
+            onClick={() => setIsAddModalOpen(true)}
+            className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] h-9 text-xs font-semibold px-4"
+          >
+            <Plus className="h-4 w-4 mr-1.5" /> เพิ่มวันหยุด
+          </Button>
+        </div>
       </div>
 
       {/* Holidays List Card */}

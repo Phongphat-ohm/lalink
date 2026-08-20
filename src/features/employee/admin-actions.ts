@@ -70,6 +70,16 @@ export async function createEmployeeAdminAction(
       };
     }
 
+    // Check Plan Entitlement Quota
+    const { EntitlementService } = await import("@/lib/subscription/entitlement");
+    const quotaCheck = await EntitlementService.checkEmployeeLimit(tenant.companyId);
+    if (!quotaCheck.allowed) {
+      return {
+        success: false,
+        message: quotaCheck.reason || "จำนวนพนักงานเต็มโควตาของแพ็กเกจแล้ว กรุณาติดต่อผู้ดูแลระบบเพื่ออัปเกรด",
+      };
+    }
+
     const rawData = {
       employeeCode: formData.get("employeeCode"),
       firstName: formData.get("firstName"),

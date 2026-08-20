@@ -5,10 +5,19 @@ export {
   rejectLeaveRequestAction,
 } from "./approval-actions";
 export {
+  createLeaveRequestByHrAction,
+  revokeApprovedLeaveAction,
+} from "./hr-proxy-leave-actions";
+export {
+  adjustLeaveBalanceAction,
+  batchAdjustLeaveBalanceAction,
+} from "./adjustment-actions";
+export {
   saveLeaveTypePolicyAction,
   addHolidayAction,
   updateHolidayAction,
   deleteHolidayAction,
+  importOfficialHolidaysAction,
 } from "./policy-actions";
 export {
   saveLeaveYearAction,

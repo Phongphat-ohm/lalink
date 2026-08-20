@@ -11,6 +11,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
@@ -80,12 +81,29 @@ export interface SerializedLeaveRequest {
   };
 }
 
+export interface AvailableLeaveEmployee {
+  id: string;
+  firstName: string;
+  lastName: string;
+  employeeCode: string;
+}
+
+export interface AvailableLeaveTypeOption {
+  id: string;
+  name: string;
+  code: string;
+}
+
 interface LeaveRequestsTableProps {
   initialRequests: SerializedLeaveRequest[];
+  availableEmployees?: AvailableLeaveEmployee[];
+  availableLeaveTypes?: AvailableLeaveTypeOption[];
 }
 
 export function LeaveRequestsTable({
   initialRequests,
+  availableEmployees = [],
+  availableLeaveTypes = [],
 }: LeaveRequestsTableProps) {
   const router = useRouter();
   const [requests, setRequests] = React.useState(initialRequests);
@@ -107,6 +125,23 @@ export function LeaveRequestsTable({
   const [rejectionReason, setRejectionReason] = React.useState("");
   const [rejectError, setRejectError] = React.useState<string | null>(null);
   const [isRejecting, setIsRejecting] = React.useState(false);
+
+  // Revoke Dialog State
+  const [revokeTarget, setRevokeTarget] =
+    React.useState<SerializedLeaveRequest | null>(null);
+  const [revokeReason, setRevokeReason] = React.useState("");
+  const [revokeError, setRevokeError] = React.useState<string | null>(null);
+  const [isRevoking, setIsRevoking] = React.useState(false);
+
+  // HR Proxy Modal State
+  const [isProxyModalOpen, setIsProxyModalOpen] = React.useState(false);
+  const [proxyEmployeeId, setProxyEmployeeId] = React.useState(availableEmployees[0]?.id || "");
+  const [proxyLeaveTypeId, setProxyLeaveTypeId] = React.useState(availableLeaveTypes[0]?.id || "");
+  const [proxyStartDate, setProxyStartDate] = React.useState("");
+  const [proxyEndDate, setProxyEndDate] = React.useState("");
+  const [proxyReason, setProxyReason] = React.useState("");
+  const [isSubmittingProxy, setIsSubmittingProxy] = React.useState(false);
+  const [proxyError, setProxyError] = React.useState<string | null>(null);
 
   // Filter requests
   const filteredRequests = requests.filter((req) => {
@@ -196,6 +231,63 @@ export function LeaveRequestsTable({
     }
   }
 
+  // Handle Proxy Leave Submission
+  async function handleProxySubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!proxyEmployeeId || !proxyLeaveTypeId || !proxyStartDate || !proxyEndDate) {
+      setProxyError("กรุณากรอกข้อมูลให้ครบถ้วน");
+      return;
+    }
+
+    setIsSubmittingProxy(true);
+    setProxyError(null);
+
+    const { createLeaveRequestByHrAction } = await import("@/features/leave");
+    const result = await createLeaveRequestByHrAction(
+      proxyEmployeeId,
+      proxyLeaveTypeId,
+      proxyStartDate,
+      proxyEndDate,
+      proxyReason,
+    );
+
+    setIsSubmittingProxy(false);
+
+    if (result.success) {
+      setIsProxyModalOpen(false);
+      setProxyStartDate("");
+      setProxyEndDate("");
+      setProxyReason("");
+      router.refresh();
+    } else {
+      setProxyError(result.message || "เกิดข้อผิดพลาดในการยื่นใบลา");
+    }
+  }
+
+  // Handle Revoke Approved Leave
+  async function handleConfirmRevoke() {
+    if (!revokeTarget) return;
+    if (!revokeReason || revokeReason.trim().length === 0) {
+      setRevokeError("กรุณาระบุเหตุผลในการเพิกถอน");
+      return;
+    }
+
+    setIsRevoking(true);
+    setRevokeError(null);
+
+    const { revokeApprovedLeaveAction } = await import("@/features/leave");
+    const result = await revokeApprovedLeaveAction(revokeTarget.id, revokeReason.trim());
+    setIsRevoking(false);
+
+    if (result.success) {
+      setRevokeTarget(null);
+      setRevokeReason("");
+      router.refresh();
+    } else {
+      setRevokeError(result.message || "เกิดข้อผิดพลาดในการเพิกถอน");
+    }
+  }
+
   const periodLabel = (period: string) => {
     switch (period) {
       case "HALF_DAY_AM":
@@ -237,7 +329,7 @@ export function LeaveRequestsTable({
         </div>
 
         {/* Filter Pills */}
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           {[
             { key: "ALL", label: "ทั้งหมด" },
             { key: "PENDING", label: "รออนุมัติ" },
@@ -259,6 +351,14 @@ export function LeaveRequestsTable({
               {tab.label}
             </Button>
           ))}
+
+          <Button
+            size="sm"
+            onClick={() => setIsProxyModalOpen(true)}
+            className="h-8 text-xs bg-[#533afd] hover:bg-[#4434d4] text-white font-semibold rounded-full px-3.5 ml-2"
+          >
+            + ยื่นใบลาแทนพนักงาน
+          </Button>
         </div>
       </div>
 
@@ -355,6 +455,21 @@ export function LeaveRequestsTable({
                           >
                             <Eye className="h-3.5 w-3.5 mr-1" /> ดูข้อมูล
                           </Button>
+
+                          {req.status === "APPROVED" && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setRevokeTarget(req);
+                                setRevokeReason("");
+                                setRevokeError(null);
+                              }}
+                              className="h-7.5 text-xs text-[#ea2261] border-[#fecdd3] hover:bg-[#ffe4e6] rounded-full px-2.5 font-semibold"
+                            >
+                              เพิกถอน
+                            </Button>
+                          )}
 
                           {req.status === "PENDING" && (
                             <>
@@ -785,6 +900,185 @@ export function LeaveRequestsTable({
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* 4. Alert Dialog: เพิกถอนใบลาที่อนุมัติแล้ว (Revoke Approved Leave) */}
+      <AlertDialog
+        open={!!revokeTarget}
+        onOpenChange={(open) => !open && setRevokeTarget(null)}
+      >
+        <AlertDialogContent className="rounded-2xl max-w-md">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold text-[#ea2261] flex items-center">
+              <AlertCircle className="h-5 w-5 text-[#ea2261] mr-2" />
+              ยืนยันการเพิกถอนใบลาที่อนุมัติแล้ว?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-[#64748d]">
+              คุณกำลังจะเพิกถอนใบลาเลขที่ <strong className="text-[#0d253d]">{revokeTarget?.requestNumber}</strong> ของ{" "}
+              <strong>{revokeTarget?.employee.firstName} {revokeTarget?.employee.lastName}</strong> (จำนวน {revokeTarget?.totalDays} วัน)
+              ระบบจะ <strong className="text-[#059669]">คืนยอดวันลาใน Ledger ทันที</strong> และส่งข้อความแจ้งเตือนทาง LINE
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <div className="my-3 space-y-2">
+            <label className="text-xs font-semibold text-[#0d253d]">
+              เหตุผลในการเพิกถอน <span className="text-[#ea2261]">*</span>
+            </label>
+            <Input
+              value={revokeReason}
+              onChange={(e) => setRevokeReason(e.target.value)}
+              placeholder="เช่น พนักงานขอยกเลิกเนื่องจากยกเลิกทริป..."
+              className="h-10 text-xs rounded-xl"
+              required
+            />
+            {revokeError && (
+              <p className="text-[11px] font-medium text-[#ea2261] flex items-center">
+                <AlertCircle className="h-3.5 w-3.5 mr-1" />
+                {revokeError}
+              </p>
+            )}
+          </div>
+
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel disabled={isRevoking} className="rounded-full text-xs">
+              ยกเลิก
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmRevoke}
+              disabled={isRevoking}
+              className="rounded-full bg-[#ea2261] hover:bg-[#d01750] text-white text-xs font-semibold"
+            >
+              {isRevoking ? "กำลังเพิกถอน..." : "ยืนยันการเพิกถอนและคืนวันลา"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* 5. Modal: ยื่นใบลาแทนพนักงาน (HR Proxy Leave Submission) */}
+      <Dialog open={isProxyModalOpen} onOpenChange={setIsProxyModalOpen}>
+        <DialogContent onClose={() => setIsProxyModalOpen(false)} className="max-w-md rounded-2xl p-6">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
+              <FileText className="h-5 w-5 text-[#533afd] mr-2" />
+              ยื่นใบลาแทนพนักงาน (HR Proxy)
+            </DialogTitle>
+            <DialogDescription className="text-xs text-[#64748d]">
+              สำหรับกรณีพนักงานเจ็บป่วยฉุกเฉิน หรือไม่สามารถใช้งาน LINE เพื่อยื่นใบลาได้
+            </DialogDescription>
+          </DialogHeader>
+
+          {proxyError && (
+            <div className="my-2 p-2.5 rounded-xl bg-[#ffe4e6] text-[#ea2261] text-xs">
+              {proxyError}
+            </div>
+          )}
+
+          <form onSubmit={handleProxySubmit} className="space-y-3.5 mt-2">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                เลือกพนักงาน <span className="text-[#ea2261]">*</span>
+              </label>
+              <select
+                value={proxyEmployeeId}
+                onChange={(e) => setProxyEmployeeId(e.target.value)}
+                required
+                className="w-full h-9 rounded-xl border border-[#e3e8ee] px-3 text-xs bg-white text-[#0d253d] focus:outline-none focus:ring-1 focus:ring-[#533afd]"
+              >
+                <option value="">-- กรุณาเลือกพนักงาน --</option>
+                {availableEmployees.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.firstName} {emp.lastName} ({emp.employeeCode})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                ประเภทการลา <span className="text-[#ea2261]">*</span>
+              </label>
+              <select
+                value={proxyLeaveTypeId}
+                onChange={(e) => setProxyLeaveTypeId(e.target.value)}
+                required
+                className="w-full h-9 rounded-xl border border-[#e3e8ee] px-3 text-xs bg-white text-[#0d253d] focus:outline-none focus:ring-1 focus:ring-[#533afd]"
+              >
+                <option value="">-- กรุณาเลือกประเภทการลา --</option>
+                {availableLeaveTypes.map((lt) => (
+                  <option key={lt.id} value={lt.id}>
+                    {lt.name} ({lt.code})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#0d253d]">
+                  ตั้งแต่วันที่ <span className="text-[#ea2261]">*</span>
+                </label>
+                <Input
+                  type="date"
+                  value={proxyStartDate}
+                  onChange={(e) => setProxyStartDate(e.target.value)}
+                  required
+                  className="h-9 rounded-xl text-xs font-mono"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#0d253d]">
+                  ถึงวันที่ <span className="text-[#ea2261]">*</span>
+                </label>
+                <Input
+                  type="date"
+                  value={proxyEndDate}
+                  onChange={(e) => setProxyEndDate(e.target.value)}
+                  required
+                  className="h-9 rounded-xl text-xs font-mono"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                เหตุผลการลา <span className="text-[#ea2261]">*</span>
+              </label>
+              <Input
+                value={proxyReason}
+                onChange={(e) => setProxyReason(e.target.value)}
+                placeholder="เช่น แอดมิทโรงพยาบาล, ผ่าตัดฉุกเฉิน..."
+                required
+                className="h-9 rounded-xl text-xs"
+              />
+            </div>
+
+            <DialogFooter className="mt-5 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsProxyModalOpen(false)}
+                disabled={isSubmittingProxy}
+                className="rounded-full text-xs h-9 px-4"
+              >
+                ยกเลิก
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSubmittingProxy}
+                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] text-xs h-9 px-5 font-semibold"
+              >
+                {isSubmittingProxy ? (
+                  <>
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> กำลังบันทึก...
+                  </>
+                ) : (
+                  "บันทึกและอนุมัติทันที"
+                )}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

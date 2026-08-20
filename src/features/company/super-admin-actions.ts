@@ -240,3 +240,191 @@ export async function superAdminResetUserPasswordAction(
     };
   }
 }
+
+/**
+ * Super Admin: Update Company details (Name, taxId, email, phone, address)
+ */
+export async function updateCompanySuperAdminAction(
+  companyId: string,
+  formData: FormData,
+): Promise<ActionResult> {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "SYSTEM_ADMIN") {
+      return { success: false, message: "Unauthorized: Super Admin only" };
+    }
+
+    const name = formData.get("name")?.toString().trim();
+    const taxId = formData.get("taxId")?.toString().trim() || null;
+    const email = formData.get("email")?.toString().trim() || null;
+    const phone = formData.get("phone")?.toString().trim() || null;
+    const address = formData.get("address")?.toString().trim() || null;
+
+    if (!name || name.length < 2) {
+      return { success: false, message: "ชื่อบริษัทต้องมีอย่างน้อย 2 ตัวอักษร" };
+    }
+
+    const updated = await prisma.company.update({
+      where: { id: companyId },
+      data: {
+        name,
+        taxId,
+        email,
+        phone,
+        address,
+      },
+    });
+
+    try {
+      const { AuditLogger } = await import("@/lib/audit");
+      await AuditLogger.log({
+        companyId: updated.id,
+        actorType: "USER",
+        actorId: session.userId,
+        action: "UPDATE_TENANT",
+        resource: "Company",
+        resourceId: updated.id,
+        details: { name: updated.name, code: updated.code, email, phone },
+      });
+    } catch {
+      // ignore
+    }
+
+    revalidatePath("/system-admin");
+    revalidatePath("/system-admin/companies");
+
+    return {
+      success: true,
+      message: `อัปเดตข้อมูลบริษัท "${updated.name}" เรียบร้อยแล้ว`,
+    };
+  } catch (error) {
+    console.error("Update Company Error:", error);
+    return { success: false, message: "เกิดข้อผิดพลาดในการอัปเดตข้อมูลบริษัท" };
+  }
+}
+
+/**
+ * Super Admin: Delete / Archive a company
+ */
+export async function deleteCompanySuperAdminAction(
+  companyId: string,
+): Promise<ActionResult> {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "SYSTEM_ADMIN") {
+      return { success: false, message: "Unauthorized: Super Admin only" };
+    }
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { id: true, name: true, code: true },
+    });
+
+    if (!company) {
+      return { success: false, message: "ไม่พบข้อมูลบริษัท" };
+    }
+
+    await prisma.company.delete({
+      where: { id: companyId },
+    });
+
+    try {
+      const { AuditLogger } = await import("@/lib/audit");
+      await AuditLogger.log({
+        actorType: "USER",
+        actorId: session.userId,
+        action: "DELETE_TENANT",
+        resource: "Company",
+        resourceId: companyId,
+        details: { companyCode: company.code, companyName: company.name },
+      });
+    } catch {
+      // ignore
+    }
+
+    revalidatePath("/system-admin");
+    revalidatePath("/system-admin/companies");
+
+    return {
+      success: true,
+      message: `ลบบริษัท "${company.name}" ออกจากระบบเรียบร้อยแล้ว`,
+    };
+  } catch (error) {
+    console.error("Delete Company Error:", error);
+    return { success: false, message: "เกิดข้อผิดพลาดในการลบบริษัท" };
+  }
+}
+
+/**
+ * Super Admin: Get complete details & stats for a tenant company
+ */
+export async function getCompanyDetailAction(companyId: string): Promise<
+  ActionResult<{
+    id: string;
+    code: string;
+    name: string;
+    taxId: string | null;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    status: string;
+    createdAt: string;
+    employeesCount: number;
+    usersCount: number;
+    leaveRequestsCount: number;
+    departments: { id: string; name: string; code: string | null }[];
+    subscription: { planName: string; planCode: string; status: string } | null;
+  }>
+> {
+  try {
+    const session = await getSession();
+    if (!session || session.role !== "SYSTEM_ADMIN") {
+      return { success: false, message: "Unauthorized" };
+    }
+
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      include: {
+        departments: { select: { id: true, name: true, code: true } },
+        subscription: { include: { plan: true } },
+        _count: {
+          select: { employees: true, users: true, leaveRequests: true },
+        },
+      },
+    });
+
+    if (!company) {
+      return { success: false, message: "ไม่พบข้อมูลบริษัท" };
+    }
+
+    return {
+      success: true,
+      data: {
+        id: company.id,
+        code: company.code,
+        name: company.name,
+        taxId: company.taxId,
+        email: company.email,
+        phone: company.phone,
+        address: company.address,
+        status: company.status,
+        createdAt: company.createdAt.toISOString(),
+        employeesCount: company._count.employees,
+        usersCount: company._count.users,
+        leaveRequestsCount: company._count.leaveRequests,
+        departments: company.departments,
+        subscription: company.subscription
+          ? {
+              planName: company.subscription.plan.name,
+              planCode: company.subscription.plan.code,
+              status: company.subscription.status,
+            }
+          : null,
+      },
+    };
+  } catch (error) {
+    console.error("Get Company Detail Error:", error);
+    return { success: false, message: "เกิดข้อผิดพลาดในการดึงข้อมูลบริษัท" };
+  }
+}
+
