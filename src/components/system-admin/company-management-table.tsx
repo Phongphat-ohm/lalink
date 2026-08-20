@@ -49,6 +49,8 @@ import {
   Eye,
   CreditCard,
 } from "lucide-react";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { toast } from "@/components/ui/toast";
 
 export interface SerializedCompany {
   id: string;
@@ -75,6 +77,8 @@ export function CompanyManagementTable({
   const [statusFilter, setStatusFilter] = React.useState<
     "ALL" | "ACTIVE" | "SUSPENDED"
   >("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
 
   // 1. Create Company Modal State
   const [isCreateModalOpen, setIsCreateModalOpen] = React.useState(false);
@@ -137,7 +141,7 @@ export function CompanyManagementTable({
     if (res.success && res.data) {
       setDetailCompany(res.data);
     } else {
-      alert(res.message || "ไม่สามารถดึงข้อมูลได้");
+      toast.error(res.message || "ไม่สามารถดึงข้อมูลได้");
     }
   }
 
@@ -206,9 +210,10 @@ export function CompanyManagementTable({
 
     if (result.success) {
       setDeleteTarget(null);
+      toast.success(result.message || "ลบบริษัทเรียบร้อยแล้ว");
       router.refresh();
     } else {
-      alert(result.message || "ไม่สามารถลบบริษัทได้");
+      toast.error(result.message || "ไม่สามารถลบบริษัทได้");
     }
   }
 
@@ -223,6 +228,12 @@ export function CompanyManagementTable({
 
     return matchesSearch && matchesStatus;
   });
+
+  const totalPages = Math.ceil(filteredCompanies.length / pageSize) || 1;
+  const paginatedCompanies = filteredCompanies.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   return (
     <div className="space-y-6">
@@ -300,14 +311,14 @@ export function CompanyManagementTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e3e8ee]/70">
-                {filteredCompanies.length === 0 ? (
+                {paginatedCompanies.length === 0 ? (
                   <tr>
                     <td colSpan={8} className="py-12 text-center text-[#64748d]">
                       ไม่พบข้อมูลบริษัทตามเงื่อนไขที่ระบุ
                     </td>
                   </tr>
                 ) : (
-                  filteredCompanies.map((c) => (
+                  paginatedCompanies.map((c) => (
                     <tr key={c.id} className="hover:bg-[#f6f9fc]/70 transition-colors">
                       <td className="py-3.5 px-4 pl-5 font-mono font-bold text-[#533afd] tabular-nums">
                         {c.code}
@@ -402,6 +413,15 @@ export function CompanyManagementTable({
               </tbody>
             </table>
           </div>
+
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredCompanies.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
 

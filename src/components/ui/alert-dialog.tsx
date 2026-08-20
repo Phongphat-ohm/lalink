@@ -4,6 +4,12 @@ import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
+interface AlertDialogContextValue {
+  onOpenChange?: (open: boolean) => void;
+}
+
+const AlertDialogContext = React.createContext<AlertDialogContextValue>({});
+
 interface AlertDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -18,15 +24,17 @@ export function AlertDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
-      <div
-        className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-150"
-        onClick={() => onOpenChange(false)}
-      />
-      {/* Content wrapper */}
-      <div className="relative z-50 w-full max-w-md">{children}</div>
-    </div>
+    <AlertDialogContext.Provider value={{ onOpenChange }}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        {/* Backdrop */}
+        <div
+          className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs transition-opacity animate-in fade-in duration-150"
+          onClick={() => onOpenChange(false)}
+        />
+        {/* Content wrapper */}
+        <div className="relative z-50 w-full max-w-md">{children}</div>
+      </div>
+    </AlertDialogContext.Provider>
   );
 }
 
@@ -116,13 +124,24 @@ export function AlertDialogCancel({
   children?: React.ReactNode;
   disabled?: boolean;
 }) {
+  const { onOpenChange } = React.useContext(AlertDialogContext);
+
+  const handleClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    if (onClick) {
+      onClick();
+    } else if (onOpenChange) {
+      onOpenChange(false);
+    }
+  };
+
   return (
     <Button
+      type="button"
       variant="outline"
       size="sm"
-      onClick={onClick}
+      onClick={handleClick}
       disabled={disabled}
-      className={cn("text-slate-600 hover:bg-slate-100", className)}
+      className={cn("text-slate-600 hover:bg-slate-100 cursor-pointer", className)}
     >
       {children}
     </Button>
@@ -145,11 +164,12 @@ export function AlertDialogAction({
 }) {
   return (
     <Button
+      type="button"
       variant={variant}
       size="sm"
       onClick={onClick}
       disabled={disabled}
-      className={className}
+      className={cn("cursor-pointer", className)}
     >
       {children}
     </Button>

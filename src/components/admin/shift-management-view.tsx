@@ -14,7 +14,19 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Clock, Plus, Loader2, Pencil, Trash2, Check } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import { Clock, Plus, Loader2, Pencil, Trash2, Check, Search, AlertCircle } from "lucide-react";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { toast } from "@/components/ui/toast";
 
 export interface SerializedShiftEntry {
   dayOfWeek: number;
@@ -45,19 +57,24 @@ interface ShiftManagementViewProps {
 }
 
 const DAY_LABELS = [
-  "อาทิตย์",
-  "จันทร์",
-  "อังคาร",
-  "พุธ",
-  "พฤหัสบดี",
-  "ศุกร์",
-  "เสาร์",
+  "วันอาทิตย์",
+  "วันจันทร์",
+  "วันอังคาร",
+  "วันพุธ",
+  "วันพฤหัสบดี",
+  "วันศุกร์",
+  "วันเสาร์",
 ];
 
-function formatSlot(entry: SerializedShiftEntry): string {
-  if (!entry.isWorkingDay) return "วันหยุด";
-  return `${entry.startTime} - ${entry.endTime}`;
-}
+const DEFAULT_DAYS: SerializedShiftEntry[] = [
+  { dayOfWeek: 0, startTime: "09:00", endTime: "18:00", isWorkingDay: false },
+  { dayOfWeek: 1, startTime: "09:00", endTime: "18:00", isWorkingDay: true },
+  { dayOfWeek: 2, startTime: "09:00", endTime: "18:00", isWorkingDay: true },
+  { dayOfWeek: 3, startTime: "09:00", endTime: "18:00", isWorkingDay: true },
+  { dayOfWeek: 4, startTime: "09:00", endTime: "18:00", isWorkingDay: true },
+  { dayOfWeek: 5, startTime: "09:00", endTime: "18:00", isWorkingDay: true },
+  { dayOfWeek: 6, startTime: "09:00", endTime: "18:00", isWorkingDay: false },
+];
 
 export function ShiftManagementView({
   shifts,
@@ -66,18 +83,42 @@ export function ShiftManagementView({
   onDeleteShift,
 }: ShiftManagementViewProps) {
   const router = useRouter();
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(6);
+
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
-  const [editingShift, setEditingShift] = React.useState<SerializedShift | null>(null);
+  const [editingShift, setEditingShift] = React.useState<SerializedShift | null>(
+    null,
+  );
   const [isSaving, setIsSaving] = React.useState(false);
+  const [deleteTarget, setDeleteTarget] = React.useState<SerializedShift | null>(null);
+  const [isDeleting, setIsDeleting] = React.useState(false);
+  const [entries, setEntries] =
+    React.useState<SerializedShiftEntry[]>(DEFAULT_DAYS);
 
   function openAddModal() {
     setEditingShift(null);
+    setEntries(DEFAULT_DAYS);
     setIsAddModalOpen(true);
   }
 
   function openEditModal(shift: SerializedShift) {
     setEditingShift(shift);
+    const map = new Map(shift.entries.map((e) => [e.dayOfWeek, e]));
+    const merged = DEFAULT_DAYS.map((d) => map.get(d.dayOfWeek) ?? d);
+    setEntries(merged);
     setIsAddModalOpen(true);
+  }
+
+  function updateEntry(
+    dayOfWeek: number,
+    patch: Partial<SerializedShiftEntry>,
+  ) {
+    setEntries((prev) =>
+      prev.map((e) => (e.dayOfWeek === dayOfWeek ? { ...e, ...patch } : e)),
+    );
   }
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
@@ -85,41 +126,75 @@ export function ShiftManagementView({
     setIsSaving(true);
     const formData = new FormData(e.currentTarget);
     if (editingShift) formData.set("id", editingShift.id);
+    entries.forEach((entry) => {
+      formData.set(`start_${entry.dayOfWeek}`, entry.startTime);
+      formData.set(`end_${entry.dayOfWeek}`, entry.endTime);
+      formData.set(
+        `work_${entry.dayOfWeek}`,
+        entry.isWorkingDay ? "true" : "false",
+      );
+    });
     const res = await onSaveShift(formData);
     setIsSaving(false);
 
     if (res.success) {
       setIsAddModalOpen(false);
       setEditingShift(null);
+      toast.success(res.message || "บันทึกกะทำงานสำเร็จ");
       router.refresh();
-    } else if (res.message) {
-      alert(res.message);
+    } else {
+      toast.error(res.message || "เกิดข้อผิดพลาดในการบันทึกกะทำงาน");
     }
   }
 
   async function handleToggle(shiftId: string) {
     const res = await onToggleShift(shiftId);
     if (res.success) {
+      toast.success(res.message || "เปลี่ยนสถานะกะทำงานสำเร็จ");
       router.refresh();
-    } else if (res.message) {
-      alert(res.message);
+    } else {
+      toast.error(res.message || "ไม่สามารถเปลี่ยนสถานะกะทำงานได้");
     }
   }
 
-  async function handleDelete(shift: SerializedShift) {
-    if (
-      !confirm(
-        `ลบกะทำงาน "${shift.name}" หรือไม่? ตารางทำงานที่อ้างอิงกะนี้จะกลับไปใช้เวลาตามที่กำหนดเอง`,
-      )
-    ) {
-      return;
-    }
-    const res = await onDeleteShift(shift.id);
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    const res = await onDeleteShift(deleteTarget.id);
+    setIsDeleting(false);
+
     if (res.success) {
+      setDeleteTarget(null);
+      toast.success(res.message || "ลบกะทำงานสำเร็จ");
       router.refresh();
-    } else if (res.message) {
-      alert(res.message);
+    } else {
+      toast.error(res.message || "ไม่สามารถลบกะทำงานได้");
     }
+  }
+
+  const filteredShifts = shifts.filter((s) => {
+    const term = searchTerm.toLowerCase();
+    const matchesSearch =
+      s.name.toLowerCase().includes(term) ||
+      (s.description && s.description.toLowerCase().includes(term));
+
+    const matchesStatus =
+      statusFilter === "ALL" ||
+      (statusFilter === "ACTIVE" && s.isActive) ||
+      (statusFilter === "INACTIVE" && !s.isActive);
+
+    return matchesSearch && matchesStatus;
+  });
+
+  const totalPages = Math.ceil(filteredShifts.length / pageSize) || 1;
+  const paginatedShifts = filteredShifts.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+
+  function formatSlot(entry: SerializedShiftEntry): string {
+    if (!entry.isWorkingDay) return "วันหยุด";
+    return `${entry.startTime} - ${entry.endTime}`;
   }
 
   return (
@@ -128,11 +203,11 @@ export function ShiftManagementView({
       <div className="border-b border-[#e3e8ee] pb-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-[#0d253d] tracking-tight">
-            กะทำงาน (Shifts)
+            กะการทำงาน (Work Shifts)
           </h1>
           <p className="text-xs text-[#64748d] mt-0.5">
-            กำหนดเวลาทำงานรายสัปดาห์สำหรับกะต่าง ๆ
-            แล้วนำไปผูกกับตารางทำงานหรือพนักงานรายคนได้
+            กำหนดเวลาเริ่ม-เลิกงานและวันทำงานในสัปดาห์
+            เพื่อนำไปผูกกับตารางเวลาทำงานของพนักงาน
           </p>
         </div>
 
@@ -145,60 +220,109 @@ export function ShiftManagementView({
         </Button>
       </div>
 
+      {/* Search & Filter Bar */}
+      <Card className="border-[#e3e8ee] bg-white shadow-xs rounded-2xl">
+        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="relative w-full sm:w-80">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
+            <Input
+              type="text"
+              placeholder="ค้นหากะทำงาน หรือรายละเอียด..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-9 h-9 rounded-xl text-xs w-full"
+            />
+          </div>
+
+          <div className="flex items-center space-x-1.5 self-start sm:self-auto">
+            {(["ALL", "ACTIVE", "INACTIVE"] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(st);
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                  statusFilter === st
+                    ? "bg-[#533afd] text-white font-semibold"
+                    : "bg-[#f6f9fc] text-[#64748d] hover:bg-[#e3e8ee]/80"
+                }`}
+              >
+                {st === "ALL"
+                  ? "ทั้งหมด"
+                  : st === "ACTIVE"
+                    ? "ใช้งานอยู่"
+                    : "ปิดใช้งาน"}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Shifts Grid */}
-      {shifts.length === 0 ? (
+      {paginatedShifts.length === 0 ? (
         <Card className="border-[#e3e8ee] bg-white rounded-2xl">
           <CardContent className="p-10 text-center text-[#94a3b8] text-sm">
-            ยังไม่มีกะทำงาน สร้างกะแรกเพื่อกำหนดเวลาทำงานของทีม
+            ไม่พบกะการทำงานที่ตรงกับเงื่อนไข
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {shifts.map((shift) => (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {paginatedShifts.map((shift) => (
             <Card
               key={shift.id}
-              className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden"
+              className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden flex flex-col justify-between"
             >
-              <CardHeader className="p-4 border-b border-[#e3e8ee] bg-[#f6f9fc]/50 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-semibold text-[#0d253d] flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-[#533afd]" />
-                  {shift.name}
-                </CardTitle>
-                {shift.isActive ? (
-                  <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200">
-                    ใช้งานอยู่
-                  </Badge>
-                ) : (
-                  <Badge variant="secondary">ปิดใช้งาน</Badge>
-                )}
-              </CardHeader>
-              <CardContent className="p-4">
-                {shift.description && (
-                  <p className="text-xs text-[#64748d] mb-3">
-                    {shift.description}
-                  </p>
-                )}
-                <div className="space-y-1.5">
-                  {shift.entries.map((entry) => (
-                    <div
-                      key={entry.dayOfWeek}
-                      className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-xs ${
-                        entry.isWorkingDay
-                          ? "bg-[#f0f4ff] text-[#0d253d]"
-                          : "bg-[#f6f9fc] text-[#94a3b8]"
-                      }`}
-                    >
-                      <span className="font-medium">
-                        {DAY_LABELS[entry.dayOfWeek]}
-                      </span>
-                      <span className="font-mono">
-                        {formatSlot(entry)}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              <div>
+                <CardHeader className="p-4 border-b border-[#e3e8ee] bg-[#f6f9fc]/50 flex flex-row items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Clock className="h-4 w-4 text-[#533afd] shrink-0" />
+                    <CardTitle className="text-sm font-semibold text-[#0d253d] truncate">
+                      {shift.name}
+                    </CardTitle>
+                  </div>
+                  {shift.isActive ? (
+                    <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      ใช้งานอยู่
+                    </Badge>
+                  ) : (
+                    <Badge variant="secondary">ปิดใช้งาน</Badge>
+                  )}
+                </CardHeader>
+                <CardContent className="p-4">
+                  {shift.description && (
+                    <p className="text-xs text-[#64748d] mb-3">
+                      {shift.description}
+                    </p>
+                  )}
+                  <div className="space-y-1.5">
+                    {shift.entries.map((entry) => (
+                      <div
+                        key={entry.dayOfWeek}
+                        className={`flex items-center justify-between rounded-lg px-3 py-1.5 text-xs ${
+                          entry.isWorkingDay
+                            ? "bg-[#f0f4ff] text-[#0d253d]"
+                            : "bg-[#f6f9fc] text-[#94a3b8]"
+                        }`}
+                      >
+                        <span className="font-medium">
+                          {DAY_LABELS[entry.dayOfWeek]}
+                        </span>
+                        <span className="font-mono">
+                          {formatSlot(entry)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </div>
 
-                <div className="mt-4 flex items-center justify-end gap-1.5">
+              <div className="p-4 pt-0">
+                <div className="pt-3 border-t border-[#e3e8ee] flex items-center justify-end gap-1.5">
                   <Button
                     variant="ghost"
                     size="sm"
@@ -220,121 +344,196 @@ export function ShiftManagementView({
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => handleDelete(shift)}
+                    onClick={() => setDeleteTarget(shift)}
                     className="h-7 text-xs text-rose-600 hover:bg-rose-50 rounded-full px-2.5"
                   >
                     <Trash2 className="h-3.5 w-3.5 mr-1" />
                     ลบ
                   </Button>
                 </div>
-              </CardContent>
+              </div>
             </Card>
           ))}
         </div>
       )}
 
+      {/* Pagination */}
+      <div className="bg-white rounded-2xl border border-[#e3e8ee] p-2">
+        <DataTablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          pageSizeOptions={[6, 12, 24]}
+          totalItems={filteredShifts.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
+      </div>
+
       {/* Add / Edit Shift Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-        <DialogContent className="sm:max-w-lg rounded-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-xl p-6 rounded-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              {editingShift ? "แก้ไขกะทำงาน" : "เพิ่มกะทำงาน"}
+            <DialogTitle className="text-base font-bold text-[#0d253d]">
+              {editingShift ? "แก้ไขกะทำงาน" : "เพิ่มกะทำงานใหม่"}
             </DialogTitle>
-            <DialogDescription>
-              กำหนดเวลาทำงานรายสัปดาห์ของกะ (เลือกวันทำงานและเวลาเริ่ม-สิ้นสุด)
+            <DialogDescription className="text-xs text-[#64748d]">
+              กำหนดเวลาเริ่มต้น-สิ้นสุด และเลือกวันทำงานในสัปดาห์
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleSave} className="space-y-4">
-            <div className="space-y-1.5">
-              <span className="text-xs text-[#64748d]">ชื่อกะทำงาน</span>
+
+          <form onSubmit={handleSave} className="space-y-4 mt-3">
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                ชื่อกะทำงาน <span className="text-[#ea2261]">*</span>
+              </label>
               <Input
-                id="shift-name"
-                name="name"
-                placeholder="เช่น กะเช้า 08:00-16:00"
-                defaultValue={editingShift?.name ?? ""}
                 required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <span className="text-xs text-[#64748d]">คำอธิบาย (ไม่บังคับ)</span>
-              <Input
-                id="shift-desc"
-                name="description"
-                placeholder="เช่น เวลาเบรก 12:00-13:00"
-                defaultValue={editingShift?.description ?? ""}
+                name="name"
+                defaultValue={editingShift?.name ?? ""}
+                placeholder="เช่น กะปกติ (09:00 - 18:00)"
+                className="h-9 rounded-xl text-xs"
               />
             </div>
 
-            <div className="space-y-1.5">
-              <span className="text-xs text-[#64748d] font-semibold">
-                เวลาทำงานรายสัปดาห์
-              </span>
-              <div className="rounded-xl border border-[#e3e8ee] divide-y divide-[#e3e8ee]">
-                {DAY_LABELS.map((label, index) => {
-                  const entry = editingShift?.entries.find(
-                    (e) => e.dayOfWeek === index,
-                  );
-                  return (
-                    <div
-                      key={index}
-                      className="grid grid-cols-[1fr_auto_auto] items-center gap-3 px-3.5 py-2.5"
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                คำอธิบาย
+              </label>
+              <Input
+                name="description"
+                defaultValue={editingShift?.description ?? ""}
+                placeholder="รายละเอียดเพิ่มเติม (ถ้ามี)"
+                className="h-9 rounded-xl text-xs"
+              />
+            </div>
+
+            <div className="border-t border-[#e3e8ee] pt-3 space-y-2">
+              <p className="text-xs font-semibold text-[#0d253d]">
+                ตารางเวลาแต่ละวันในสัปดาห์
+              </p>
+
+              {entries.map((entry) => (
+                <div
+                  key={entry.dayOfWeek}
+                  className="flex items-center gap-3 rounded-xl bg-[#f6f9fc] p-2.5 text-xs"
+                >
+                  <label className="flex items-center space-x-2 w-32 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={entry.isWorkingDay}
+                      onChange={(e) =>
+                        updateEntry(entry.dayOfWeek, {
+                          isWorkingDay: e.target.checked,
+                        })
+                      }
+                      className="rounded border-[#e3e8ee] text-[#533afd] focus:ring-[#533afd]"
+                    />
+                    <span
+                      className={`font-medium ${
+                        entry.isWorkingDay
+                          ? "text-[#0d253d]"
+                          : "text-[#94a3b8]"
+                      }`}
                     >
-                      <div className="flex items-center gap-2.5">
-                        <input
-                          type="checkbox"
-                          name={`working_${index}`}
-                          defaultChecked={entry ? entry.isWorkingDay : index !== 0 && index !== 6}
-                          className="h-4 w-4 rounded border-[#a8c3de] text-[#533afd] focus:ring-[#533afd]/30"
-                        />
-                        <span className="text-xs font-medium text-[#0d253d] w-20">
-                          {label}
-                        </span>
-                      </div>
+                      {DAY_LABELS[entry.dayOfWeek]}
+                    </span>
+                  </label>
+
+                  {entry.isWorkingDay ? (
+                    <div className="flex items-center gap-2 flex-1">
                       <Input
                         type="time"
-                        name={`start_${index}`}
-                        defaultValue={entry?.startTime && entry.isWorkingDay ? entry.startTime : "09:00"}
-                        className="h-8 w-28 text-xs"
+                        value={entry.startTime}
+                        onChange={(e) =>
+                          updateEntry(entry.dayOfWeek, {
+                            startTime: e.target.value,
+                          })
+                        }
+                        className="h-8 text-xs font-mono"
+                        required
                       />
-                      <span className="text-[#94a3b8] text-xs">ถึง</span>
+                      <span className="text-[#64748d]">ถึง</span>
                       <Input
                         type="time"
-                        name={`end_${index}`}
-                        defaultValue={entry?.endTime && entry.isWorkingDay ? entry.endTime : "18:00"}
-                        className="h-8 w-28 text-xs"
+                        value={entry.endTime}
+                        onChange={(e) =>
+                          updateEntry(entry.dayOfWeek, {
+                            endTime: e.target.value,
+                          })
+                        }
+                        className="h-8 text-xs font-mono"
+                        required
                       />
                     </div>
-                  );
-                })}
-              </div>
-              <p className="text-[11px] text-[#64748d]">
-                การเลือก (tick) ช่องวันทำงาน จะใช้เวลาเริ่ม-สิ้นสุดของวันนั้นในการคำนวณลารายชั่วโมง
-              </p>
+                  ) : (
+                    <span className="text-xs text-[#94a3b8] italic">
+                      วันหยุดประจำสัปดาห์
+                    </span>
+                  )}
+                </div>
+              ))}
             </div>
 
-            <DialogFooter>
+            <DialogFooter className="mt-5">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsAddModalOpen(false)}
+                className="h-9 rounded-full text-xs"
               >
                 ยกเลิก
               </Button>
               <Button
                 type="submit"
                 disabled={isSaving}
-                className="bg-[#533afd] text-white hover:bg-[#4434d4]"
+                className="h-9 rounded-full bg-[#533afd] text-white text-xs font-semibold px-4"
               >
-                {isSaving ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  "บันทึก"
+                {isSaving && (
+                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                 )}
+                บันทึกกะทำงาน
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent className="rounded-2xl p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
+              <AlertCircle className="h-5 w-5 text-[#ea2261] mr-2" />
+              ยืนยันการลบกะทำงาน?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-[#64748d]">
+              คุณกำลังจะลบกะทำงาน &ldquo;{deleteTarget?.name}&rdquo; ตารางทำงานที่อ้างอิงกะนี้จะกลับไปใช้เวลาตามที่กำหนดเอง
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel
+              disabled={isDeleting}
+              className="rounded-full text-xs h-9"
+            >
+              ยกเลิก
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isDeleting}
+              className="rounded-full bg-[#ea2261] hover:bg-[#d91452] text-white text-xs h-9 px-4"
+            >
+              {isDeleting && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              )}
+              ยืนยันการลบ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

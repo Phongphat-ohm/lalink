@@ -24,6 +24,7 @@ export interface UploadResult {
 export interface IStorageService {
   upload(options: UploadOptions): Promise<UploadResult>;
   delete(key: string): Promise<void>;
+  getObject(key: string): Promise<Buffer | null>;
   getSignedDownloadUrl(key: string, expiresInSeconds?: number): Promise<string>;
   getSignedUploadUrl(
     key: string,

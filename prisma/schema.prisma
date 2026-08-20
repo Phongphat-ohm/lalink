@@ -81,6 +81,27 @@ enum SubscriptionStatus {
   PAST_DUE
 }
 
+enum PlanUpgradeRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum MessageCategory {
+  GENERAL
+  UPGRADE_REQUEST
+  BILLING
+  SUPPORT
+  SYSTEM
+}
+
+enum ThreadStatus {
+  OPEN
+  CLOSED
+  RESOLVED
+}
+
 enum ActorType {
   USER
   EMPLOYEE
@@ -152,6 +173,8 @@ model Company {
   leaveYears           LeaveYear[]
   importLogs           ImportLog[]
   subscription         Subscription?
+  planUpgradeRequests  PlanUpgradeRequest[]
+  messageThreads       MessageThread[]
 
   @@index([status])
   @@index([createdAt])
@@ -195,7 +218,9 @@ model Plan {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  subscriptions Subscription[]
+  subscriptions               Subscription[]
+  currentPlanUpgradeRequests  PlanUpgradeRequest[] @relation("CurrentPlanRequests")
+  targetPlanUpgradeRequests   PlanUpgradeRequest[] @relation("TargetPlanRequests")
 
   @@map("plans")
 }
@@ -218,6 +243,99 @@ model Subscription {
 
   @@index([status])
   @@map("subscriptions")
+}
+
+model PlanUpgradeRequest {
+  id             String                   @id @default(cuid())
+  companyId      String
+  currentPlanId  String?
+  targetPlanId   String
+  requestedSeats Int?
+  billingCycle   String                   @default("MONTHLY") // MONTHLY, YEARLY
+  notes          String?
+  status         PlanUpgradeRequestStatus @default(PENDING)
+  requestedById  String
+  reviewedById   String?
+  reviewedAt     DateTime?
+  adminNotes     String?
+  createdAt      DateTime                 @default(now())
+  updatedAt      DateTime                 @updatedAt
+
+  // Relations
+  company        Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  currentPlan    Plan?           @relation("CurrentPlanRequests", fields: [currentPlanId], references: [id], onDelete: SetNull)
+  targetPlan     Plan            @relation("TargetPlanRequests", fields: [targetPlanId], references: [id], onDelete: Restrict)
+  requestedBy    User            @relation("RequestedBy", fields: [requestedById], references: [id], onDelete: Cascade)
+  reviewedBy     User?           @relation("ReviewedBy", fields: [reviewedById], references: [id], onDelete: SetNull)
+  messageThreads MessageThread[]
+
+  @@index([companyId])
+  @@index([status])
+  @@map("plan_upgrade_requests")
+}
+
+model MessageThread {
+  id                   String              @id @default(cuid())
+  subject              String
+  category             MessageCategory     @default(GENERAL)
+  status               ThreadStatus        @default(OPEN)
+  companyId            String?             // null for Global Platform Admin threads
+  planUpgradeRequestId String?             // Link to a specific plan upgrade request
+  createdById          String
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  lastMessageAt        DateTime            @default(now())
+
+  // Relations
+  company            Company?            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy          User                @relation("ThreadCreator", fields: [createdById], references: [id], onDelete: Cascade)
+  planUpgradeRequest PlanUpgradeRequest? @relation(fields: [planUpgradeRequestId], references: [id], onDelete: SetNull)
+  messages           Message[]
+
+  @@index([companyId])
+  @@index([category])
+  @@index([status])
+  @@index([lastMessageAt])
+  @@map("message_threads")
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  threadId       String
+  senderId       String
+  content        String        @db.Text
+  isInternalOnly Boolean       @default(false) // Admin private note
+  isRead         Boolean       @default(false)
+  readAt         DateTime?
+  createdAt      DateTime      @default(now())
+
+  // Relations
+  thread      MessageThread       @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender      User                @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  attachments MessageAttachment[]
+
+  @@index([threadId])
+  @@index([senderId])
+  @@index([isRead])
+  @@index([createdAt])
+  @@map("messages")
+}
+
+model MessageAttachment {
+  id           String   @id @default(cuid())
+  messageId    String
+  originalName String
+  fileName     String
+  fileSize     Int
+  mimeType     String
+  objectKey    String
+  createdAt    DateTime @default(now())
+
+  // Relations
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+
+  @@index([messageId])
+  @@map("message_attachments")
 }
 
 // ---------------------------------------------------------------------
@@ -288,7 +406,11 @@ model User {
   sessions       UserSession[]
   loginLogs      LoginLog[]
   leaveApprovals LeaveApproval[]
-  passwordHistory PasswordHistory[]
+  passwordHistory       PasswordHistory[]
+  requestedPlanUpgrades PlanUpgradeRequest[] @relation("RequestedBy")
+  reviewedPlanUpgrades  PlanUpgradeRequest[] @relation("ReviewedBy")
+  createdThreads        MessageThread[]      @relation("ThreadCreator")
+  sentMessages          Message[]
 
   @@index([companyId])
   @@index([email])

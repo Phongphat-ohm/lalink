@@ -3,12 +3,13 @@ import {
   SubscriptionManagementView,
   SerializedCompanySubscription,
   AvailablePlan,
+  SerializedGlobalPlanUpgradeRequest,
 } from "@/components/system-admin/subscription-management-view";
 
 export const dynamic = "force-dynamic";
 
 export default async function SystemAdminSubscriptionsPage() {
-  const [companies, plans] = await Promise.all([
+  const [companies, plans, upgradeRequests] = await Promise.all([
     prisma.company.findMany({
       include: {
         subscription: {
@@ -25,6 +26,16 @@ export default async function SystemAdminSubscriptionsPage() {
     prisma.plan.findMany({
       where: { isActive: true },
       orderBy: { priceMonthly: "asc" },
+    }),
+    prisma.planUpgradeRequest.findMany({
+      include: {
+        company: { select: { id: true, name: true, code: true } },
+        targetPlan: true,
+        currentPlan: true,
+        requestedBy: { select: { name: true, email: true } },
+        reviewedBy: { select: { name: true } },
+      },
+      orderBy: { createdAt: "desc" },
     }),
   ]);
 
@@ -58,10 +69,32 @@ export default async function SystemAdminSubscriptionsPage() {
     maxEmployees: p.maxEmployees,
   }));
 
+  const serializedRequests: SerializedGlobalPlanUpgradeRequest[] = upgradeRequests.map((r) => ({
+    id: r.id,
+    companyId: r.companyId,
+    companyName: r.company.name,
+    companyCode: r.company.code,
+    targetPlanId: r.targetPlanId,
+    targetPlanName: r.targetPlan.name,
+    targetPlanCode: r.targetPlan.code,
+    currentPlanName: r.currentPlan?.name || null,
+    requestedSeats: r.requestedSeats,
+    billingCycle: r.billingCycle,
+    notes: r.notes,
+    status: r.status,
+    requestedByName: r.requestedBy.name,
+    requestedByEmail: r.requestedBy.email,
+    reviewedByName: r.reviewedBy?.name || null,
+    reviewedAt: r.reviewedAt ? r.reviewedAt.toISOString() : null,
+    adminNotes: r.adminNotes,
+    createdAt: r.createdAt.toISOString(),
+  }));
+
   return (
     <SubscriptionManagementView
       companies={serializedCompanies}
       availablePlans={availablePlans}
+      upgradeRequests={serializedRequests}
     />
   );
 }

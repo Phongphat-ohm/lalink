@@ -47,6 +47,8 @@ import {
   Ban,
 } from "lucide-react";
 import { UserStatus } from "@prisma/client";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { toast } from "@/components/ui/toast";
 
 export interface SerializedGlobalUser {
   id: string;
@@ -92,6 +94,10 @@ export function UserManagementTable({
   const router = useRouter();
   const [searchTerm, setSearchTerm] = React.useState("");
   const [roleFilter, setRoleFilter] = React.useState<string>("ALL");
+  const [companyFilter, setCompanyFilter] = React.useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = React.useState<string>("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
 
   // 1. Create User State
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
@@ -198,9 +204,10 @@ export function UserManagementTable({
     const newStatus = u.status === "ACTIVE" ? UserStatus.SUSPENDED : UserStatus.ACTIVE;
     const result = await toggleUserStatusSuperAdminAction(u.id, newStatus);
     if (result.success) {
+      toast.success(result.message || "เปลี่ยนสถานะผู้ใช้งานสำเร็จ");
       router.refresh();
     } else {
-      alert(result.message || "ไม่สามารถเปลี่ยนสถานะได้");
+      toast.error(result.message || "ไม่สามารถเปลี่ยนสถานะได้");
     }
   }
 
@@ -212,9 +219,10 @@ export function UserManagementTable({
 
     if (result.success) {
       setDeleteTarget(null);
+      toast.success(result.message || "ลบผู้ใช้งานเรียบร้อยแล้ว");
       router.refresh();
     } else {
-      alert(result.message || "ไม่สามารถลบผู้ใช้งานได้");
+      toast.error(result.message || "ไม่สามารถลบผู้ใช้งานได้");
     }
   }
 
@@ -255,9 +263,20 @@ export function UserManagementTable({
           u.company.code.toLowerCase().includes(searchTerm.toLowerCase())));
 
     const matchesRole = roleFilter === "ALL" || u.role.code === roleFilter;
+    const matchesCompany =
+      companyFilter === "ALL" ||
+      (companyFilter === "CENTRAL" && !u.company) ||
+      (u.company && u.company.id === companyFilter);
+    const matchesStatus = statusFilter === "ALL" || u.status === statusFilter;
 
-    return matchesSearch && matchesRole;
+    return matchesSearch && matchesRole && matchesCompany && matchesStatus;
   });
+
+  const totalPages = Math.ceil(filteredUsers.length / pageSize) || 1;
+  const paginatedUsers = filteredUsers.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   return (
     <div className="space-y-6">
@@ -282,32 +301,76 @@ export function UserManagementTable({
 
       {/* Search & Filter Bar */}
       <Card className="border-[#e3e8ee] bg-white shadow-xs rounded-2xl">
-        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
-          <div className="relative w-full sm:w-80">
+        <CardContent className="p-4 flex flex-col lg:flex-row items-center justify-between gap-3">
+          <div className="relative w-full lg:w-72">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
             <Input
               type="text"
               placeholder="ค้นหาชื่อ, อีเมล, บริษัท..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
               className="pl-9 h-9 rounded-xl text-xs w-full"
             />
           </div>
 
-          <div className="flex items-center space-x-2 w-full sm:w-auto">
-            <span className="text-xs font-semibold text-[#64748d]">สิทธิ์:</span>
-            <Select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="h-9 rounded-xl text-xs w-44"
-            >
-              <option value="ALL">ทุกสิทธิ์ (ทั้งหมด)</option>
-              <option value="SYSTEM_ADMIN">Super Admin</option>
-              <option value="COMPANY_ADMIN">Company Admin</option>
-              <option value="HR_ADMIN">HR Admin</option>
-              <option value="HR">HR Officer</option>
-              <option value="MANAGER">Manager</option>
-            </Select>
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
+            <div className="flex items-center space-x-1.5">
+              <span className="text-xs font-semibold text-[#64748d]">สิทธิ์:</span>
+              <Select
+                value={roleFilter}
+                onChange={(e) => {
+                  setRoleFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 rounded-xl text-xs w-36"
+              >
+                <option value="ALL">ทุกสิทธิ์ (ทั้งหมด)</option>
+                <option value="SYSTEM_ADMIN">Super Admin</option>
+                <option value="COMPANY_ADMIN">Company Admin</option>
+                <option value="HR_ADMIN">HR Admin</option>
+                <option value="HR">HR Officer</option>
+                <option value="MANAGER">Manager</option>
+              </Select>
+            </div>
+
+            <div className="flex items-center space-x-1.5">
+              <span className="text-xs font-semibold text-[#64748d]">บริษัท:</span>
+              <Select
+                value={companyFilter}
+                onChange={(e) => {
+                  setCompanyFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 rounded-xl text-xs w-36"
+              >
+                <option value="ALL">ทุกบริษัท (ทั้งหมด)</option>
+                <option value="CENTRAL">Platform Central</option>
+                {availableCompanies.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name} ({c.code})
+                  </option>
+                ))}
+              </Select>
+            </div>
+
+            <div className="flex items-center space-x-1.5">
+              <span className="text-xs font-semibold text-[#64748d]">สถานะ:</span>
+              <Select
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 rounded-xl text-xs w-28"
+              >
+                <option value="ALL">ทั้งหมด</option>
+                <option value="ACTIVE">เปิดใช้งาน</option>
+                <option value="SUSPENDED">ระงับใช้งาน</option>
+              </Select>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -329,14 +392,14 @@ export function UserManagementTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e3e8ee]/70">
-                {filteredUsers.length === 0 ? (
+                {paginatedUsers.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-[#64748d]">
-                      ไม่พบข้อมูลผู้ใช้งานตามคำค้นหา
+                      ไม่พบข้อมูลผู้ใช้งานตามเงื่อนไขที่ระบุ
                     </td>
                   </tr>
                 ) : (
-                  filteredUsers.map((u) => (
+                  paginatedUsers.map((u) => (
                     <tr key={u.id} className="hover:bg-[#f6f9fc]/70 transition-colors">
                       <td className="py-3.5 px-4 pl-5 font-bold text-[#0d253d]">{u.name}</td>
                       <td className="py-3.5 px-4 text-[#64748d]">{u.email}</td>
@@ -356,8 +419,8 @@ export function UserManagementTable({
                       </td>
                       <td className="py-3.5 px-4">
                         <Badge
-                          variant={u.role.code === "SYSTEM_ADMIN" ? "default" : "outline"}
-                          className="text-[10px] rounded-full px-2.5 py-0.5"
+                          variant="outline"
+                          className="font-mono text-[10px] rounded-full px-2 text-[#533afd] border-[#533afd]/30 bg-[#533afd]/5"
                         >
                           {u.role.name}
                         </Badge>
@@ -365,9 +428,9 @@ export function UserManagementTable({
                       <td className="py-3.5 px-4">
                         <Badge
                           variant={u.status === "ACTIVE" ? "success" : "destructive"}
-                          className="text-[10px] rounded-full px-2 py-0.5"
+                          className="text-[10px] rounded-full px-2"
                         >
-                          {u.status}
+                          {u.status === "ACTIVE" ? "เปิดใช้งาน" : "ระงับใช้งาน"}
                         </Badge>
                       </td>
                       <td className="py-3.5 px-4 text-[#64748d] tabular-nums">
@@ -375,18 +438,18 @@ export function UserManagementTable({
                       </td>
                       <td className="py-3.5 px-4 pr-5 text-right">
                         <div className="flex items-center justify-end space-x-1.5">
-                          {/* Edit User Button */}
+                          {/* Edit User */}
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => openEditModal(u)}
-                            className="h-7 text-xs rounded-full px-2 text-[#533afd] border-[#e3e8ee] hover:bg-[#533afd]/10"
-                            title="แก้ไขผู้ใช้"
+                            className="h-7 text-xs rounded-full px-2 text-[#533afd] border-[#e3e8ee] hover:bg-[#533afd]/10 font-semibold"
+                            title="แก้ไขข้อมูล"
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
 
-                          {/* Reset Password Button */}
+                          {/* Reset Password */}
                           <Button
                             variant="outline"
                             size="sm"
@@ -433,6 +496,15 @@ export function UserManagementTable({
               </tbody>
             </table>
           </div>
+
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredUsers.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
 

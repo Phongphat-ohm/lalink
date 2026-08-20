@@ -14,7 +14,18 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { CalendarRange, Plus, Loader2, RefreshCw, Check } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import { CalendarRange, Plus, Loader2, RefreshCw, Check, AlertCircle } from "lucide-react";
+import { toast } from "@/components/ui/toast";
 
 interface SerializedLeaveYear {
   id: string;
@@ -60,8 +71,11 @@ export function LeaveYearView({
   const [isCarryModalOpen, setIsCarryModalOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
   const [isCarrying, setIsCarrying] = React.useState(false);
+  const [activateTarget, setActivateTarget] = React.useState<SerializedLeaveYear | null>(null);
+  const [deleteTarget, setDeleteTarget] = React.useState<SerializedLeaveYear | null>(null);
+  const [isActionLoading, setIsActionLoading] = React.useState(false);
 
-  const currentYear = new Date().getFullYear();
+  const currentYear = new Date().getFullYear() + 543;
 
   async function handleSave(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -72,29 +86,40 @@ export function LeaveYearView({
 
     if (res.success) {
       setIsAddModalOpen(false);
+      toast.success(res.message || "บันทึกปีลางานสำเร็จ");
       router.refresh();
-    } else if (res.message) {
-      alert(res.message);
+    } else {
+      toast.error(res.message || "เกิดข้อผิดพลาดในการบันทึกปีลางาน");
     }
   }
 
-  async function handleActivate(leaveYearId: string) {
-    if (!confirm("เปิดใช้งานปีลานี้หรือไม่? (ปีลาอื่นจะถูกปิดใช้งาน)")) return;
-    const res = await onActivateLeaveYear(leaveYearId);
+  async function handleActivateConfirm() {
+    if (!activateTarget) return;
+    setIsActionLoading(true);
+    const res = await onActivateLeaveYear(activateTarget.id);
+    setIsActionLoading(false);
+
     if (res.success) {
+      setActivateTarget(null);
+      toast.success(res.message || "เปิดใช้งานปีลางานสำเร็จ");
       router.refresh();
-    } else if (res.message) {
-      alert(res.message);
+    } else {
+      toast.error(res.message || "ไม่สามารถเปิดใช้งานปีลางานได้");
     }
   }
 
-  async function handleDelete(leaveYearId: string) {
-    if (!confirm("ลบปีลานี้หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้")) return;
-    const res = await onDeleteLeaveYear(leaveYearId);
+  async function handleDeleteConfirm() {
+    if (!deleteTarget) return;
+    setIsActionLoading(true);
+    const res = await onDeleteLeaveYear(deleteTarget.id);
+    setIsActionLoading(false);
+
     if (res.success) {
+      setDeleteTarget(null);
+      toast.success(res.message || "ลบปีลางานสำเร็จ");
       router.refresh();
-    } else if (res.message) {
-      alert(res.message);
+    } else {
+      toast.error(res.message || "ไม่สามารถลบปีลางานได้");
     }
   }
 
@@ -107,9 +132,10 @@ export function LeaveYearView({
 
     if (res.success) {
       setIsCarryModalOpen(false);
+      toast.success(res.message || "ดำเนินการสะสมวันลาสำเร็จ");
       router.refresh();
-    } else if (res.message) {
-      alert(res.message);
+    } else {
+      toast.error(res.message || "เกิดข้อผิดพลาดในการสะสมวันลา");
     }
   }
 
@@ -123,18 +149,20 @@ export function LeaveYearView({
           </h1>
           <p className="text-xs text-[#64748d] mt-0.5">
             กำหนดปีลางานขององค์กร (ปีปฏิทินหรือปีงบประมาณ) และดำเนินการสะสมวันลา
+            ข้ามปีตามเงื่อนไขของแต่ละประเภทการลา
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex items-center gap-2">
           <Button
-            onClick={() => setIsCarryModalOpen(true)}
             variant="outline"
-            className="rounded-full h-9 text-xs font-semibold px-4"
+            onClick={() => setIsCarryModalOpen(true)}
+            className="rounded-full border-[#533afd]/30 text-[#533afd] hover:bg-[#533afd]/10 h-9 text-xs font-semibold px-4"
           >
             <RefreshCw className="h-4 w-4 mr-1.5" />
-            สะสมวันลา
+            สะสมวันลาข้ามปี
           </Button>
+
           <Button
             onClick={() => setIsAddModalOpen(true)}
             className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] h-9 text-xs font-semibold px-4"
@@ -145,12 +173,12 @@ export function LeaveYearView({
         </div>
       </div>
 
-      {/* Leave Years Table Card */}
+      {/* Leave Years Table */}
       <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden">
         <CardHeader className="p-4 border-b border-[#e3e8ee] bg-[#f6f9fc]/50 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-semibold text-[#0d253d] flex items-center">
             <CalendarRange className="h-4 w-4 text-[#533afd] mr-2" />
-            ปีลางานทั้งหมด ({leaveYears.length} ปี)
+            ปีลางานทั้งหมด ({leaveYears.length} รายการ)
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
@@ -159,8 +187,8 @@ export function LeaveYearView({
               <tr>
                 <th className="py-3.5 px-4 pl-5 font-semibold">ชื่อปีลา</th>
                 <th className="py-3.5 px-4 font-semibold">ปี</th>
-                <th className="py-3.5 px-4 font-semibold">วันที่เริ่มต้น</th>
-                <th className="py-3.5 px-4 font-semibold">วันที่สิ้นสุด</th>
+                <th className="py-3.5 px-4 font-semibold">วันเริ่มต้น</th>
+                <th className="py-3.5 px-4 font-semibold">วันสิ้นสุด</th>
                 <th className="py-3.5 px-4 font-semibold text-center">
                   สถานะ
                 </th>
@@ -170,32 +198,38 @@ export function LeaveYearView({
               </tr>
             </thead>
             <tbody className="divide-y divide-[#e3e8ee]/70">
-              {leaveYears.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-[#94a3b8]">
-                    ยังไม่มีปีลางาน ใช้ปีปฏิทินโดยอัตโนมัติ เริ่มเพิ่มปีลาเพื่อกำหนดรอบวันลาขององค์กร
-                  </td>
-                </tr>
-              )}
               {leaveYears.map((ly) => (
-                <tr key={ly.id} className="hover:bg-[#f6f9fc]/50">
-                  <td className="py-3.5 px-4 pl-5 font-medium text-[#0d253d]">
+                <tr
+                  key={ly.id}
+                  className="hover:bg-[#f6f9fc]/70 transition-colors"
+                >
+                  <td className="py-3.5 px-4 pl-5 font-semibold text-[#0d253d]">
                     {ly.name}
                   </td>
-                  <td className="py-3.5 px-4 text-[#475569]">{ly.year}</td>
-                  <td className="py-3.5 px-4 text-[#475569]">
+                  <td className="py-3.5 px-4 font-mono font-semibold text-[#533afd] tabular-nums">
+                    {ly.year}
+                  </td>
+                  <td className="py-3.5 px-4 text-[#64748d] font-mono tabular-nums">
                     {formatDate(ly.startDate)}
                   </td>
-                  <td className="py-3.5 px-4 text-[#475569]">
+                  <td className="py-3.5 px-4 text-[#64748d] font-mono tabular-nums">
                     {formatDate(ly.endDate)}
                   </td>
                   <td className="py-3.5 px-4 text-center">
                     {ly.isActive ? (
-                      <Badge className="bg-emerald-50 text-emerald-700 border border-emerald-200">
+                      <Badge
+                        variant="success"
+                        className="text-[10px] rounded-full"
+                      >
                         ใช้งานอยู่
                       </Badge>
                     ) : (
-                      <Badge variant="secondary">ปิดใช้งาน</Badge>
+                      <Badge
+                        variant="secondary"
+                        className="text-[10px] rounded-full"
+                      >
+                        ปิดใช้งาน
+                      </Badge>
                     )}
                   </td>
                   <td className="py-3.5 px-4 pr-5 text-right">
@@ -204,7 +238,7 @@ export function LeaveYearView({
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => handleActivate(ly.id)}
+                          onClick={() => setActivateTarget(ly)}
                           className="h-7 text-xs text-emerald-600 hover:bg-emerald-50 rounded-full px-2.5"
                         >
                           <Check className="h-3.5 w-3.5 mr-1" />
@@ -214,7 +248,7 @@ export function LeaveYearView({
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => handleDelete(ly.id)}
+                        onClick={() => setDeleteTarget(ly)}
                         className="h-7 text-xs text-rose-600 hover:bg-rose-50 rounded-full px-2.5"
                       >
                         ลบ
@@ -264,16 +298,41 @@ export function LeaveYearView({
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <span className="text-xs text-[#64748d]">
-                  วันที่เริ่มต้น
+                  วันเริ่มต้น
                 </span>
-                <Input id="ly-start" name="startDate" type="date" required />
+                <Input
+                  id="ly-start"
+                  name="startDate"
+                  type="date"
+                  required
+                />
               </div>
               <div className="space-y-1.5">
                 <span className="text-xs text-[#64748d]">
-                  วันที่สิ้นสุด
+                  วันสิ้นสุด
                 </span>
-                <Input id="ly-end" name="endDate" type="date" required />
+                <Input
+                  id="ly-end"
+                  name="endDate"
+                  type="date"
+                  required
+                />
               </div>
+            </div>
+            <div className="flex items-center gap-2 pt-2">
+              <input
+                id="ly-active"
+                name="isActive"
+                type="checkbox"
+                value="true"
+                className="rounded border-[#e3e8ee] text-[#533afd] focus:ring-[#533afd]"
+              />
+              <label
+                htmlFor="ly-active"
+                className="text-xs text-[#0d253d] cursor-pointer"
+              >
+                ตั้งเป็นปีลาที่ใช้งานอยู่ (Active Year)
+              </label>
             </div>
             <DialogFooter>
               <Button
@@ -359,6 +418,79 @@ export function LeaveYearView({
           </form>
         </DialogContent>
       </Dialog>
+
+      {/* Activate Confirmation Dialog */}
+      <AlertDialog
+        open={!!activateTarget}
+        onOpenChange={(open) => !open && setActivateTarget(null)}
+      >
+        <AlertDialogContent className="rounded-2xl p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
+              <Check className="h-5 w-5 text-emerald-600 mr-2" />
+              ยืนยันการเปิดใช้งานปีลางาน?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-[#64748d]">
+              คุณกำลังจะเปิดใช้งานปีลา &ldquo;{activateTarget?.name}&rdquo; ({activateTarget?.year}) 
+              ระบบจะตั้งปีลานี้เป็นปีปัจจุบัน และปิดการใช้งานปีลาอื่นโดยอัตโนมัติ
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel
+              disabled={isActionLoading}
+              className="rounded-full text-xs h-9"
+            >
+              ยกเลิก
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleActivateConfirm}
+              disabled={isActionLoading}
+              className="rounded-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 px-4"
+            >
+              {isActionLoading && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              )}
+              ยืนยันเปิดใช้งาน
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Confirmation Dialog */}
+      <AlertDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+      >
+        <AlertDialogContent className="rounded-2xl p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
+              <AlertCircle className="h-5 w-5 text-[#ea2261] mr-2" />
+              ยืนยันการลบปีลางาน?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-[#64748d]">
+              คุณกำลังจะลบปีลา &ldquo;{deleteTarget?.name}&rdquo; ออกจากระบบ การกระทำนี้ไม่สามารถย้อนกลับได้
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel
+              disabled={isActionLoading}
+              className="rounded-full text-xs h-9"
+            >
+              ยกเลิก
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteConfirm}
+              disabled={isActionLoading}
+              className="rounded-full bg-[#ea2261] hover:bg-[#d91452] text-white text-xs h-9 px-4"
+            >
+              {isActionLoading && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              )}
+              ยืนยันการลบ
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

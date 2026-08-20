@@ -30,6 +30,8 @@ import {
   CalendarClock,
   Workflow,
   UserRound,
+  CreditCard,
+  Mail,
 } from "lucide-react";
 import { logoutAdminAction } from "@/features/auth";
 import { hasPermission, PERMISSIONS } from "@/lib/permissions/rbac";
@@ -173,6 +175,11 @@ export function AdminSidebarLayout({
           icon: Megaphone,
           permission: PERMISSIONS.ANNOUNCEMENT_MANAGE,
         },
+        {
+          href: "/admin/messages",
+          label: "กล่องข้อความระบบ",
+          icon: Mail,
+        },
       ],
     },
     {
@@ -195,6 +202,12 @@ export function AdminSidebarLayout({
           label: "ผู้ใช้เข้าสู่ระบบ",
           icon: KeyRound,
           permission: PERMISSIONS.USER_MANAGE,
+        },
+        {
+          href: "/admin/subscription",
+          label: "แพ็กเกจและการใช้งาน",
+          icon: CreditCard,
+          permission: PERMISSIONS.SUBSCRIPTION_VIEW,
         },
         {
           href: "/admin/settings",

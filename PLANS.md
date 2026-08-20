@@ -440,6 +440,253 @@ Next.js App Runtime
 
 ---
 
+### Phase 18: System Admin UX, Sidebar Categorization & Platform-wide Filter & Pagination (100% Complete)
+
+**เป้าหมาย**: เพิ่ม UX Scroll อิสระใน System Admin, จัดกลุ่มเมนู Sidebar 5 หมวดหมู่, สร้างคอมโพเนนต์กลาง `DataTablePagination` และใส่ Search, Multi-Criteria Filter และ Pagination ในทุกตาราง (23 ตาราง)
+
+- [x] **18.1 System Admin Independent Scroll Container**
+  - [x] แก้ไข `src/app/system-admin/layout.tsx` ให้มี `h-[100dvh] overflow-hidden` พร้อม `main className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 lg:p-8 w-full"`
+- [x] **18.2 System Admin Sidebar Categorized Navigation**
+  - [x] จัดหมวดหมู่เมนูใน `src/components/system-admin/system-admin-sidebar.tsx` เป็น 5 หมวดหมู่ (ภาพรวมระบบ, จัดการผู้เช่า & SaaS, ผู้ใช้งาน & ไดเรกทอรี, ความปลอดภัย & ตรวจสอบ, โครงสร้างพื้นฐาน & บำรุงรักษา)
+- [x] **18.3 Reusable DataTablePagination Component**
+  - [x] สร้าง `src/components/ui/data-table-pagination.tsx` รองรับ Page size selection `[10, 20, 50, 100]`, dynamic ellipsis pagination, item range summary
+- [x] **18.4 Filter & Pagination Across All Tables (23/23 Tables Completed)**
+  - [x] System Admin (10/10): Companies, Plans, Subscriptions, Users, Employees, Sessions, Security Events, Audit Logs, Backup, API Keys
+  - [x] Company Admin / HR (13/13): Employees, Leave Requests, Leave Balances, Departments, Positions, Branches, Users, Shifts, Work Schedules, Holidays, Announcements, Audit Logs, Line Accounts
+- [x] **18.5 Final Quality Gate & Production Build Verification**
+  - [x] `npm run lint` — PASS 100%
+  - [x] `npm run type-check` — PASS 100%
+  - [x] `npm run test` — PASS 100% (24 suites, 206 tests)
+  - [x] `npx prisma validate` — PASS 100%
+  - [x] `npx next build` — PASS 100% (All routes compiled)
+
+---
+
+### Phase 19: Company Admin SaaS Subscription & Quotas Management (100% Complete)
+
+**เป้าหมาย**: เพิ่มหน้าระบบ Subscription สำหรับ Company Admin (`/admin/subscription`) พร้อมแสดงโควตาการใช้งาน, สถิติทรัพยากร, รายการฟีเจอร์ตามแพ็กเกจ, ตารางเปรียบเทียบทุกแพ็กเกจ และระบบส่งคำขออัปเกรด
+
+- [x] **19.1 Company Subscription Page & Visual Gauges (`/admin/subscription`)**
+  - [x] สร้าง `src/components/admin/company-subscription-view.tsx` แสดงข้อมูลแพ็กเกจปัจจุบัน, สถานะรอบบิล, นับถอยหลังวันหมดอายุ/Trial
+  - [x] เกจวัดโควตาพนักงาน (`Employees Quota`) และที่นั่งผู้ดูแลระบบ (`Admin Seats`) พร้อม Progress Bar และแจ้งเตือนเมื่อเกินโควตา
+  - [x] สรุปสถิติทรัพยากร: สาขา, แผนก, รายการคำขอลา, ไฟล์เอกสารแนบบน Cloud Storage
+  - [x] ตารางสิทธิ์การใช้งานฟังก์ชัน (Features & Modules Matrix)
+  - [x] ตารางเปรียบเทียบระดับแพ็กเกจทั้งหมด (Available Plans Comparison)
+- [x] **19.2 Plan Upgrade Request Action**
+  - [x] พัฒนา Server Action `requestPlanUpgradeAction` ใน `src/features/subscription/subscription-actions.ts` พร้อมบันทึก Immutable Audit Trail
+  - [x] เพิ่ม Modal ขออัปเกรดแพ็กเกจ / ขยายโควตา
+- [x] **19.3 Navigation & Quick Widget**
+  - [x] เพิ่มเมนู `แพ็กเกจและการใช้งาน` บน Company Admin Sidebar (`src/components/admin/admin-sidebar.tsx`)
+  - [x] เพิ่ม Quick Widget ในหน้าตั้งค่าองค์กร (`src/components/admin/admin-settings-view.tsx`)
+- [x] **19.4 Quality Gate & Tests**
+  - [x] สร้างชุดทดสอบ `tests/unit/company-subscription.test.ts`
+  - [x] `npm run lint` — PASS 100%
+  - [x] `npm run type-check` — PASS 100%
+  - [x] `npm run test` — All 25 Test Suites (210 Tests) PASS 100%
+  - [x] `npx prisma validate` — PASS 100%
+  - [x] `npx next build` — PASS 100% (47 routes compiled)
+
+---
+
+### Phase 20: Native Dialog Replacement (Toasts & Accessible Alert Dialogs)
+
+**เป้าหมาย**: ตรวจสอบและแทนที่การใช้งาน Browser `alert("")`, `confirm("")`, `prompt("")` ทั้งหมดในระบบ ด้วยโมเดิร์น UI Toasts และ Accessible `AlertDialog` Modals
+
+- [x] **20.1 พัฒนาระบบ Toast Notification**
+  - [x] สร้าง `src/components/ui/toast.tsx` พร้อม singleton `toast.success`, `toast.error`, `toast.warning`, `toast.info` และคอมโพเนนต์ `<Toaster />`
+  - [x] ติดตั้ง `<Toaster />` ใน Root Layout (`src/app/layout.tsx`)
+- [x] **20.2 ปรับปรุงการแจ้งเตือนและยืนยันในทุกโมดูล**
+  - [x] แทนที่ `alert()` และ `confirm()` ในฝั่ง Company Admin (Announcements, Branches, Holidays, Leave Years, LINE Accounts, Positions, Shifts, Users, Work Schedules, Workflows)
+  - [x] แทนที่ `alert()` และ `confirm()` ในฝั่ง System Admin (API Keys, Backups, Companies, Plans, Security Center, Sessions, Subscriptions, Users, Super Admin Employees)
+- [x] **20.3 Quality Gate Verification**
+  - [x] `grep_search` ตรวจสอบทั้ง repo: `alert()`, `confirm()`, `prompt()` เหลือ 0 รายการ
+  - [x] `npm run lint` — PASS 100%
+  - [x] `npm run type-check` — PASS 100%
+  - [x] `npm run test` — All 25 Test Suites (210 Tests) PASS 100%
+  - [x] `npx prisma validate` — PASS 100%
+  - [x] `npx next build` — PASS 100% (47 routes compiled)
+
+---
+
+### Phase 21: End-to-End SaaS Plan Upgrade Request & Approval System
+
+**เป้าหมาย**: พัฒนาระบบขอปรับระดับแพ็กเกจ (Plan Upgrade Request) และการพิจารณาอนุมัติ/ปฏิเสธคำขอจากฝั่ง System Admin แบบครบวงจร
+
+- [x] **21.1 Database Schema & Migration**
+  - [x] เพิ่ม Enum `PlanUpgradeRequestStatus` (`PENDING`, `APPROVED`, `REJECTED`, `CANCELLED`) ใน `prisma/schema.prisma`
+  - [x] เพิ่ม Model `PlanUpgradeRequest` พร้อม Relations (`Company`, `Plan`, `User`)
+  - [x] ดำเนินการสร้างและรัน Migration `20260820085831_add_plan_upgrade_request` บน PostgreSQL
+- [x] **21.2 Server Actions**
+  - [x] `requestPlanUpgradeAction`: ส่งคำขอปรับระดับแพ็กเกจ เลือกรอบบิล (Monthly/Yearly) และระบุโควตาพนักงานเพิ่มเติม
+  - [x] `cancelPlanUpgradeRequestAction`: บริษัทสามารถยกเลิกคำขอที่อยู่ระหว่างรอตรวจสอบได้
+  - [x] `approvePlanUpgradeRequestAction`: Super Admin อนุมัติคำขอ เลือกระยะเวลารอบบิล (1-24 เดือน) และเปิดใช้งาน Subscription อัตโนมัติใน Database Transaction
+  - [x] `rejectPlanUpgradeRequestAction`: Super Admin ปฏิเสธคำขอพร้อมระบุเหตุผล/คำแนะนำ
+- [x] **21.3 Company Admin Subscription View (`/admin/subscription`)**
+  - [x] เพิ่มตารางประวัติคำขอ (Upgrade Requests History) แสดงสถานะ, รอบบิล, ข้อความตอบกลับ และปุ่มยกเลิกคำขอ
+  - [x] อัปเกรด Modal ขอปรับระดับแพ็กเกจ รองรับการเลือกประเภทการชำระเงิน (รายเดือน/รายปี) และขยายโควตาพนักงาน
+- [x] **21.4 System Admin Subscription View (`/system-admin/subscriptions`)**
+  - [x] เพิ่มแท็บ "คำขอปรับระดับแพ็กเกจ" พร้อม Badge นับจำนวนคำขอที่รอตรวจสอบ (Pending Counter)
+  - [x] เพิ่ม Modal อนุมัติคำขอ (Approve Modal) เลือกระยะเวลารอบบิล และระบุ Admin Notes
+  - [x] เพิ่ม Modal ปฏิเสธคำขอ (Reject Modal) ระบุเหตุผล
+  - [x] เพิ่มระบบค้นหา, ฟิลเตอร์สถานะ และ Pagination
+- [x] **21.5 Quality Gate Verification**
+  - [x] Unit Tests: `tests/unit/company-subscription.test.ts` (214/214 tests pass)
+  - [x] `npm run lint` — PASS (0 Errors)
+  - [x] `npm run type-check` — PASS (0 Errors)
+  - [x] `npm run prisma:validate` — Valid
+  - [x] `npx next build` — PASS (100% compiled across all 47 routes)
+
+---
+
+### Phase 22: In-App Mailbox & Support Messaging System + Request Detail Dialogs
+
+**เป้าหมาย**: พัฒนาระบบกล่องข้อความภายใน (Mailbox / Threaded Messaging) สำหรับส่งและตอบกลับข้อความระหว่าง Company Admin และ System Admin พร้อม Modal ดูรายละเอียดคำขอแพ็กเกจอย่างละเอียด
+
+- [x] **22.1 Database Schema & Migration**
+  - [x] เพิ่ม Enum `MessageCategory` (`GENERAL`, `UPGRADE_REQUEST`, `BILLING`, `SUPPORT`, `SYSTEM`)
+  - [x] เพิ่ม Enum `ThreadStatus` (`OPEN`, `CLOSED`, `RESOLVED`)
+  - [x] เพิ่ม Model `MessageThread` และ `Message` พร้อม Relations (`Company`, `User`, `PlanUpgradeRequest`)
+  - [x] ดำเนินการสร้างและรัน Migration `20260820090813_add_messaging_system` บน PostgreSQL
+- [x] **22.2 Server Actions (`src/features/messaging/message-actions.ts`)**
+  - [x] `createMessageThreadAction`: สร้างหัวข้อสนทนาและข้อความเริ่มต้น
+  - [x] `replyMessageAction`: ตอบกลับข้อความในหัวข้อสนทนา (รองรับ Internal Note สำหรับ Super Admin)
+  - [x] `updateThreadStatusAction`: เปลี่ยนสถานะหัวข้อ (OPEN, RESOLVED, CLOSED)
+  - [x] `getThreadMessagesAction`: ดึงข้อความใน Thread และอัปเดตสถานะการอ่าน
+- [x] **22.3 Company Admin Mailbox (`/admin/messages`) & Request Detail Dialog**
+  - [x] พัฒนาหน้า `/admin/messages` ด้วยคอมโพเนนต์ `MailboxView` (Master-Detail layout, ฟิลเตอร์หมวดหมู่, ค้นหา, ส่งข้อความใหม่, ตอบกลับ)
+  - [x] เพิ่ม Modal "ดูรายละเอียดคำขอ" ใน `/admin/subscription` แสดงสรุปข้อมูลคำขอครบถ้วน และปุ่มเปิดกล่องข้อความ
+  - [x] เพิ่มเมนู "กล่องข้อความระบบ" บน Admin Sidebar
+- [x] **22.4 System Admin Support Mailbox (`/system-admin/messages`) & Request Detail Dialog**
+  - [x] พัฒนาหน้า `/system-admin/messages` ด้วยคอมโพเนนต์ `SystemMailboxView` (จัดการข้อความข้ามองค์กร, ฟิลเตอร์บริษัท/สถานะ, ตอบกลับ, บันทึกภายใน, ปรับสถานะ)
+  - [x] เพิ่ม Modal "ดูรายละเอียดคำขอ" ใน `/system-admin/subscriptions` พร้อมปุ่มเปิดศูนย์ข้อความ และปุ่มอนุมัติ/ปฏิเสธทันที
+  - [x] เพิ่มเมนู "ศูนย์ข้อความ & ซัพพอร์ต (Mailbox)" บน System Admin Sidebar
+- [x] **22.5 Quality Gate Verification**
+  - [x] Unit Tests: `tests/unit/messaging-system.test.ts` (220/220 tests pass across 26 test suites)
+  - [x] `npm run lint` — PASS (0 Errors)
+  - [x] `npm run type-check` — PASS (0 Errors)
+  - [x] `npm run prisma:validate` — Valid
+  - [x] `npx next build` — PASS (100% compiled across all 49 routes)
+
+---
+
+### Phase 23: Dynamic AutoSearch Combobox & S3 File Attachments for Messaging System
+
+**เป้าหมาย**: ปรับปรุงระบบกล่องข้อความให้ใช้ AutoSearch Combobox ในการค้นหาองค์กรแทนการโหลดใส่ `<select>` ทั้งหมด และเพิ่มระบบแนบไฟล์เอกสาร/ภาพประกอบ (File Attachments) ทั้งในการส่งข้อความและตอบกลับ
+
+- [x] **23.1 Database Schema & Migration**
+  - [x] เพิ่ม Model `MessageAttachment` พร้อม Relations (`Message`) และบันทึก Metadata (originalName, fileName, fileSize, mimeType, objectKey)
+  - [x] ดำเนินการสร้างและรัน Migration `20260820091654_add_message_attachments` บน PostgreSQL
+- [x] **23.2 Storage & Server Actions**
+  - [x] เพิ่ม `generateMessageAttachmentKey` ใน `src/lib/storage/partition.ts` เพื่อการแยกข้อมูลระดับองค์กร (Tenant Isolation)
+  - [x] `searchCompaniesAction`: ระบบ AutoSearch ค้นหาองค์กรแบบ Dynamic Debounce (จำกัด 10 รายการต่อการค้นหา)
+  - [x] `createMessageThreadAction` & `replyMessageAction`: รองรับการส่งและประมวลผลไฟล์แนบ (Base64 -> Buffer -> S3 upload -> DB record)
+  - [x] `getMessageAttachmentDownloadUrlAction`: สร้าง Signed Download URL สำหรับเปิด/ดาวน์โหลดไฟล์แนบอย่างปลอดภัย
+- [x] **23.3 UI Components Enhancements**
+  - [x] `SystemMailboxView`: แทนที่ `<select>` ด้วย **AutoSearch Combobox** (Input + Realtime Suggestions Popover)
+  - [x] `MailboxView` & `SystemMailboxView`: เพิ่มปุ่มแนบไฟล์ (Paperclip), Badge พรีวิวไฟล์แนบพร้อมขนาดไฟล์ (Size) และปุ่มลบไฟล์
+  - [x] การแสดงผลไฟล์แนบในกล่องแชท: กล่องการ์ดไฟล์แนบพร้อมประเภทไฟล์ (PDF/Image/Document), ขนาดไฟล์ และปุ่มดาวน์โหลด
+- [x] **23.4 Quality Gate Verification**
+  - [x] Unit Tests: `tests/unit/messaging-system.test.ts` (221/221 tests pass across 26 test suites)
+  - [x] `npm run lint` — PASS (0 Errors)
+  - [x] `npm run type-check` — PASS (0 Errors)
+  - [x] `npm run prisma:validate` — Valid
+  - [x] `npx next build` — PASS (100% compiled across all 49 routes)
+
+---
+
+### Phase 24: Fix Context-Aware Auto Dismissal for AlertDialogCancel & Cancel Upgrade Request Modal
+
+**เป้าหมาย**: แก้ไขการทำงานของปุ่ม "กลับ" ใน Modal ยืนยันการยกเลิกคำขอปรับระดับแพ็กเกจ และปรับปรุง `AlertDialogCancel` ให้รองรับ Context-aware auto-dismissal ทั่วทั้งแอป
+
+- [x] **24.1 Context-Aware AlertDialog System (`src/components/ui/alert-dialog.tsx`)**
+  - [x] สร้าง `AlertDialogContext` เพื่อส่งต่อ `onOpenChange` ไปยังคอมโพเนนต์ลูก
+  - [x] ปรับแต่ง `AlertDialogCancel` ให้เรียก `onOpenChange(false)` อัตโนมัติเมื่อกดปุ่มยกเลิก/กลับ แม้ไม่ได้ระบุ `onClick` โดยตรง
+- [x] **24.2 Fix Company Subscription View (`src/components/admin/company-subscription-view.tsx`)**
+  - [x] เพิ่ม `onClick={() => setCancelTargetId(null)}` ให้กับ `AlertDialogCancel` ใน Modal ยกเลิกคำขอ
+- [x] **24.3 Quality Gate Verification**
+  - [x] `npm run lint` — PASS (0 Errors)
+  - [x] `npm run type-check` — PASS (0 Errors)
+  - [x] `npm run test` — PASS (221/221 tests across 26 test files)
+  - [x] `npm run prisma:validate` — Valid
+  - [x] `npx next build` — PASS (100% compiled across all 49 routes)
+
+---
+
+### Phase 25: Fix S3 Bucket Resolution & Storage Configuration for Object Uploads
+
+**เป้าหมาย**: แก้ไขปัญหาการเชื่อมต่อและการอัปโหลดไฟล์ขึ้น S3 / SeaweedFS โดยให้รองรับตัวแปร `S3_BUCKET` จาก `.env` อย่างถูกต้อง
+
+- [x] **25.1 Storage Service (`src/lib/storage/service.ts`)**
+  - [x] ปรับแต่ง `this.bucketName` ใน `S3StorageService` ให้ตรวจสอบ `process.env.S3_BUCKET` ร่วมกับ `process.env.S3_BUCKET_NAME`
+  - [x] รองรับการชี้ไปยัง Bucket `lalink-dev` ตามที่กำหนดไว้ใน `.env`
+- [x] **25.2 Quality Gate Verification**
+  - [x] Unit Tests: `tests/unit/storage.test.ts` (222/222 tests pass across 26 test suites)
+  - [x] `npm run lint` — PASS (0 Errors)
+  - [x] `npm run type-check` — PASS (0 Errors)
+  - [x] `npm run prisma:validate` — Valid
+  - [x] `npx next build` — PASS (100% compiled across all 49 routes)
+
+---
+
+### Phase 26: S3-Compatible Off-Site Database Backup Storage & Download URLs
+
+**เป้าหมาย**: ปรับปรุงระบบสำรองฐานข้อมูล (Database Backup) ให้อัปโหลดไฟล์ Snapshot Gzip ขึ้น S3 Storage เพื่อความปลอดภัยระดับ Disaster Recovery และสร้าง Pre-signed Download URL
+
+- [x] **26.1 Backup Service S3 Integration (`src/lib/backup/backup-service.ts`)**
+  - [x] อัปโหลดไฟล์ Snapshot (`.json.gz`) ขึ้น S3 Storage ที่ Key `backups/<filename>` ทันทีที่มีการ Trigger Backup
+  - [x] เพิ่มเมธอด `getBackupDownloadUrl` สำหรับสร้าง Pre-signed URL ดาวน์โหลดตรงจาก S3
+  - [x] เก็บสำรองไฟล์ใน Local Directory เป็น Fallback Cache
+- [x] **26.2 Secure Backup Download Route (`src/app/api/system-admin/backup/[id]/download/route.ts`)**
+  - [x] ปรับแต่งให้ Redirect ไปยัง S3 Pre-signed URL อัตโนมัติ (พร้อม Local Stream Fallback)
+- [x] **26.3 Quality Gate Verification**
+  - [x] Unit Tests: `tests/unit/backup.test.ts` (224/224 tests pass across 27 test suites)
+  - [x] `npm run lint` — PASS (0 Errors)
+  - [x] `npm run type-check` — PASS (0 Errors)
+  - [x] `npm run prisma:validate` — Valid
+  - [x] `npx next build` — PASS (100% compiled across all 49 routes)
+
+---
+
+### Phase 27: Comprehensive 42-Table Full Database Snapshot & Metadata Breakdown
+
+**เป้าหมาย**: ขยายระบบสำรองฐานข้อมูลให้ครอบคลุมครบทุก 42 ตารางใน PostgreSQL พร้อมสรุป Metadata จำนวนข้อมูลรายตารางอย่างละเอียด
+
+- [x] **27.1 Full 42-Table Snapshot Query (`src/lib/backup/backup-service.ts`)**
+  - [x] เพิ่มการ Query ทุกตารางในฐานข้อมูลครบถ้วน 42 ตาราง (รวม Branches, Workflows, Approvals, Attachments, Messages, Threads, Logs, Settings, Years, API Keys ฯลฯ)
+  - [x] คำนวณ `totalRecords` และ `tableCounts` บันทึกลงใน JSON Snapshot Metadata
+  - [x] กรองข้อมูลด้านความปลอดภัย (ตัด Password Hash)
+- [x] **27.2 Quality Gate Verification**
+  - [x] Unit Tests: `tests/unit/backup.test.ts` (224/224 tests pass across 27 test suites)
+  - [x] `npm run lint` — PASS (0 Errors)
+  - [x] `npm run type-check` — PASS (0 Errors)
+  - [x] `npm run prisma:validate` — Valid
+  - [x] `npx next build` — PASS (100% compiled across all 49 routes)
+
+---
+
+### Phase 28: Enterprise All-in-One Multi-Format Backup Bundle (SQL + JSON + S3 Manifest + Metadata)
+
+**เป้าหมาย**: ยกระดับระบบสำรองฐานข้อมูลให้สร้างชุด Backup แบบ All-in-One Multi-Format ZIP Bundle ซึ่งประกอบด้วยไฟล์ SQL Dump, JSON Snapshot, S3 Attachments Manifest และ Manifest ข้อมูลสรุป
+
+- [x] **28.1 PostgreSQL SQL Generator (`src/lib/backup/sql-generator.ts`)**
+  - [x] พัฒนาตัวแปลงข้อมูลเป็น SQL `INSERT` statements สำหรับทุก 42 ตาราง
+  - [x] จัดการ Foreign Keys (`SET session_replication_role = 'replica';`), Type formatting (Date, Booleans, Nulls, JSON, BigInt)
+- [x] **28.2 Multi-Format ZIP Bundle Package (`src/lib/backup/backup-service.ts`)**
+  - [x] รวมไฟล์ 4 ชิ้นเข้าไว้ใน `.zip`:
+    - `dump.sql` (PostgreSQL raw dump สำหรับ restore ทันที)
+    - `data_snapshot.json` (Structured JSON snapshot)
+    - `attachments_manifest.json` (S3 object storage inventory)
+    - `manifest.json` (SHA-256 Checksum, table record counts, system version)
+  - [x] อัปโหลด `.zip` ขึ้น S3 Storage และบันทึก local cache
+- [x] **28.3 Quality Gate Verification**
+  - [x] Unit Tests: `tests/unit/backup.test.ts` (225/225 tests pass across 27 test suites)
+  - [x] `npm run lint` — PASS (0 Errors)
+  - [x] `npm run type-check` — PASS (0 Errors)
+  - [x] `npm run prisma:validate` — Valid
+  - [x] `npx next build` — PASS (100% compiled across all 49 routes)
+
+---
+
 
 
 ## 4. แบบฟอร์มรายงานสรุปผลหลังจบแต่ละ Task

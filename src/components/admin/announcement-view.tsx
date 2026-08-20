@@ -36,12 +36,15 @@ import {
   AlertCircle,
   Loader2,
   Pencil,
+  Search,
 } from "lucide-react";
+import { toast } from "@/components/ui/toast";
 import {
   createAnnouncementAction,
   updateAnnouncementAction,
   deleteAnnouncementAction,
 } from "@/features/notification/announcement-actions";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 
 export interface SerializedAnnouncement {
   id: string;
@@ -78,6 +81,11 @@ export function AnnouncementView({
   departments,
 }: AnnouncementViewProps) {
   const router = useRouter();
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [targetGroupFilter, setTargetGroupFilter] = React.useState<string>("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(5);
+
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [editTarget, setEditTarget] =
     React.useState<SerializedAnnouncement | null>(null);
@@ -139,11 +147,32 @@ export function AnnouncementView({
 
     if (result.success) {
       setDeleteTarget(null);
+      toast.success(result.message || "ลบประกาศเรียบร้อยแล้ว");
       router.refresh();
     } else {
-      alert(result.message || "ไม่สามารถลบประกาศได้");
+      toast.error(result.message || "ไม่สามารถลบประกาศได้");
     }
   }
+
+  const filteredAnnouncements = announcements.filter((a) => {
+    const term = searchTerm.toLowerCase();
+    const matchesSearch =
+      a.title.toLowerCase().includes(term) ||
+      a.content.toLowerCase().includes(term) ||
+      (a.branchName && a.branchName.toLowerCase().includes(term)) ||
+      (a.departmentName && a.departmentName.toLowerCase().includes(term));
+
+    const matchesGroup =
+      targetGroupFilter === "ALL" || a.targetGroup === targetGroupFilter;
+
+    return matchesSearch && matchesGroup;
+  });
+
+  const totalPages = Math.ceil(filteredAnnouncements.length / pageSize) || 1;
+  const paginatedAnnouncements = filteredAnnouncements.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   return (
     <div className="space-y-6">
@@ -151,18 +180,23 @@ export function AnnouncementView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-[#0d253d] tracking-tight">
-            ประกาศและข่าวสารองค์กร (Announcements)
+            ประกาศข่าวสารองค์กร (Announcements)
           </h1>
           <p className="text-xs text-[#64748d] mt-0.5">
-            สร้างประกาศข่าวสาร วันหยุด หรือข้อมูลสำคัญแจ้งเตือนพนักงานผ่านระบบ
+            ส่งข้อมูลข่าวสารและประกาศสำคัญผ่าน LINE Bot และ Dashboard ไปยังพนักงาน
           </p>
         </div>
 
         <Button
           onClick={() => {
-            setIsCreateOpen(true);
             setEditTarget(null);
+            setTitle("");
+            setContent("");
+            setTargetGroup("ALL");
+            setBranchId("");
+            setDepartmentId("");
             setError(null);
+            setIsCreateOpen(true);
           }}
           className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white px-5 h-9 text-xs font-semibold shadow-sm"
         >
@@ -170,15 +204,58 @@ export function AnnouncementView({
         </Button>
       </div>
 
-      {/* Announcements List */}
-      <div className="space-y-3">
-        {announcements.length === 0 ? (
-          <div className="text-center py-12 bg-white rounded-2xl border border-dashed border-[#e3e8ee] p-6 text-xs text-[#64748d]">
-            ยังไม่มีประกาศในระบบ กดปุ่ม &ldquo;สร้างประกาศใหม่&rdquo;
-            เพื่อเผยแพร่ข่าวสาร
+      {/* Search & Filter Bar */}
+      <Card className="border-[#e3e8ee] bg-white shadow-xs rounded-2xl">
+        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="relative w-full sm:w-80">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
+            <Input
+              type="text"
+              placeholder="ค้นหาหัวข้อประกาศ หรือเนื้อหา..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-9 h-9 rounded-xl text-xs w-full"
+            />
           </div>
+
+          <div className="flex items-center space-x-1.5 self-start sm:self-auto">
+            {[
+              { key: "ALL", label: "ทั้งหมด" },
+              { key: "ALL_EMPLOYEES", label: "ทุกคน" },
+              { key: "BRANCH", label: "ตามสาขา" },
+              { key: "DEPARTMENT", label: "ตามแผนก" },
+            ].map((st) => (
+              <button
+                key={st.key}
+                type="button"
+                onClick={() => {
+                  setTargetGroupFilter(st.key === "ALL_EMPLOYEES" ? "ALL" : st.key);
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                  targetGroupFilter === (st.key === "ALL_EMPLOYEES" ? "ALL" : st.key)
+                    ? "bg-[#533afd] text-white font-semibold"
+                    : "bg-[#f6f9fc] text-[#64748d] hover:bg-[#e3e8ee]/80"
+                }`}
+              >
+                {st.label}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Announcements List */}
+      <div className="space-y-4">
+        {paginatedAnnouncements.length === 0 ? (
+          <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl p-12 text-center text-xs text-[#64748d]">
+            ไม่พบประกาศข่าวสารตามเงื่อนไขที่ระบุ
+          </Card>
         ) : (
-          announcements.map((a) => (
+          paginatedAnnouncements.map((a) => (
             <Card
               key={a.id}
               className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden hover:border-[#533afd]/40 transition-colors"
@@ -253,6 +330,19 @@ export function AnnouncementView({
         )}
       </div>
 
+      {/* Pagination */}
+      <div className="bg-white rounded-2xl border border-[#e3e8ee] p-2">
+        <DataTablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          pageSizeOptions={[5, 10, 20]}
+          totalItems={filteredAnnouncements.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
+      </div>
+
       {/* Create Announcement Modal */}
       <Dialog
         open={isCreateOpen}
@@ -262,22 +352,19 @@ export function AnnouncementView({
         }}
       >
         <DialogContent
-          onClose={() => setIsCreateOpen(false)}
+          onClose={() => {
+            setIsCreateOpen(false);
+            setEditTarget(null);
+          }}
           className="max-w-md rounded-2xl p-6"
         >
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
-              {editTarget ? (
-                <Pencil className="h-5 w-5 text-[#533afd] mr-2" />
-              ) : (
-                <Megaphone className="h-5 w-5 text-[#533afd] mr-2" />
-              )}
+              <Megaphone className="h-5 w-5 text-[#533afd] mr-2" />
               {editTarget ? "แก้ไขประกาศ" : "สร้างประกาศใหม่"}
             </DialogTitle>
             <DialogDescription className="text-xs text-[#64748d]">
-              {editTarget
-                ? `แก้ไขประกาศ "${editTarget.title}"`
-                : "กรอกหัวข้อและเนื้อหาสำหรับแจ้งเตือนพนักงาน"}
+              กำหนดหัวข้อและกลุ่มเป้าหมายที่จะได้รับข้อความ
             </DialogDescription>
           </DialogHeader>
 
@@ -293,45 +380,47 @@ export function AnnouncementView({
                 หัวข้อประกาศ <span className="text-[#ea2261]">*</span>
               </label>
               <Input
-                placeholder="เช่น แจ้งหยุดทำการช่วงปีใหม่, ประกาศปรับปรุงระบบ"
+                placeholder="เช่น ประกาศวันหยุดพิเศษประจำปี"
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
+                className="text-xs h-9 rounded-xl"
                 required
-                disabled={isLoading}
-                className="h-9 rounded-xl text-xs"
               />
             </div>
 
             <div className="space-y-1">
               <label className="text-xs font-semibold text-[#0d253d]">
-                กลุ่มเป้าหมายผู้รับประกาศ
+                กลุ่มเป้าหมาย (Audience)
               </label>
               <Select
                 value={targetGroup}
-                onChange={(e) => setTargetGroup(e.target.value as any)}
-                disabled={isLoading}
-                className="h-9 rounded-xl text-xs"
+                onChange={(e) =>
+                  setTargetGroup(
+                    e.target.value as "ALL" | "BRANCH" | "DEPARTMENT",
+                  )
+                }
+                className="text-xs h-9 rounded-xl"
               >
-                <option value="ALL">
-                  พนักงานทุกคนในบริษัท (All Employees)
+                <option value="ALL">ทุกคนในบริษัท (All Employees)</option>
+                <option value="BRANCH">เฉพาะสาขา (Specific Branch)</option>
+                <option value="DEPARTMENT">
+                  เฉพาะแผนก (Specific Department)
                 </option>
-                <option value="BRANCH">เฉพาะสาขาที่กำหนด</option>
-                <option value="DEPARTMENT">เฉพาะแผนกที่กำหนด</option>
               </Select>
             </div>
 
             {targetGroup === "BRANCH" && (
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-[#0d253d]">
-                  เลือกสาขา
+                  เลือกสาขา <span className="text-[#ea2261]">*</span>
                 </label>
                 <Select
                   value={branchId}
                   onChange={(e) => setBranchId(e.target.value)}
-                  disabled={isLoading}
-                  className="h-9 rounded-xl text-xs"
+                  className="text-xs h-9 rounded-xl"
+                  required
                 >
-                  <option value="">-- กรุณาเลือกสาขา --</option>
+                  <option value="">-- เลือกสาขา --</option>
                   {branches.map((b) => (
                     <option key={b.id} value={b.id}>
                       {b.name}
@@ -344,15 +433,15 @@ export function AnnouncementView({
             {targetGroup === "DEPARTMENT" && (
               <div className="space-y-1">
                 <label className="text-xs font-semibold text-[#0d253d]">
-                  เลือกแผนก
+                  เลือกแผนก <span className="text-[#ea2261]">*</span>
                 </label>
                 <Select
                   value={departmentId}
                   onChange={(e) => setDepartmentId(e.target.value)}
-                  disabled={isLoading}
-                  className="h-9 rounded-xl text-xs"
+                  className="text-xs h-9 rounded-xl"
+                  required
                 >
-                  <option value="">-- กรุณาเลือกแผนก --</option>
+                  <option value="">-- เลือกแผนก --</option>
                   {departments.map((d) => (
                     <option key={d.id} value={d.id}>
                       {d.name}
@@ -367,17 +456,15 @@ export function AnnouncementView({
                 เนื้อหาประกาศ <span className="text-[#ea2261]">*</span>
               </label>
               <textarea
-                rows={4}
-                placeholder="ระบุรายละเอียดประกาศ..."
+                placeholder="พิมพ์ข้อความประกาศที่นี่..."
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
+                className="w-full text-xs p-3 rounded-xl border border-[#a8c3de]/60 focus:border-[#533afd] focus:outline-none min-h-[100px] resize-none"
                 required
-                disabled={isLoading}
-                className="w-full rounded-xl border border-[#a8c3de]/60 p-2.5 text-xs focus:border-[#533afd] focus:outline-none"
               />
             </div>
 
-            <DialogFooter className="mt-6 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
+            <DialogFooter className="mt-5">
               <Button
                 type="button"
                 variant="outline"
@@ -385,59 +472,55 @@ export function AnnouncementView({
                   setIsCreateOpen(false);
                   setEditTarget(null);
                 }}
-                disabled={isLoading}
-                className="rounded-full text-xs h-9 px-4"
+                className="rounded-full text-xs h-9"
               >
                 ยกเลิก
               </Button>
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] text-xs h-9 px-5 font-semibold"
+                className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white text-xs h-9 px-4"
               >
-{isLoading ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      {editTarget ? "กำลังบันทึก..." : "กำลังเผยแพร่..."}
-                    </>
-                  ) : editTarget ? (
-                    "บันทึกการแก้ไข"
-                  ) : (
-                    "เผยแพร่ประกาศ"
-                  )}
+                {isLoading ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                ) : null}
+                {editTarget ? "บันทึกการแก้ไข" : "เผยแพร่ประกาศ"}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      {/* Delete Announcement Dialog */}
       <AlertDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
       >
-        <AlertDialogContent className="max-w-md rounded-2xl p-6">
+        <AlertDialogContent className="rounded-2xl p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base font-bold text-[#0d253d]">
               ยืนยันการลบประกาศ?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-[#64748d]">
-              คุณต้องการลบประกาศ &ldquo;{deleteTarget?.title}&rdquo; ใช่หรือไม่?
+              คุณกำลังจะลบประกาศ &ldquo;{deleteTarget?.title}&rdquo; ออกจากระบบ
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-4">
             <AlertDialogCancel
               disabled={isLoading}
-              className="rounded-full text-xs h-9 px-4"
+              className="rounded-full text-xs h-9"
             >
               ยกเลิก
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
               disabled={isLoading}
-              className="rounded-full bg-[#ea2261] text-white hover:bg-[#d91452] text-xs h-9 px-5 font-semibold"
+              className="rounded-full bg-[#ea2261] hover:bg-[#d91452] text-white text-xs h-9 px-4"
             >
-              {isLoading ? "กำลังลบ..." : "ลบประกาศ"}
+              {isLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              ) : null}
+              ยืนยันการลบ
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

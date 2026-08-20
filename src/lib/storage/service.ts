@@ -19,7 +19,10 @@ export class S3StorageService implements IStorageService {
 
   constructor(config?: Partial<StorageConfig>) {
     this.bucketName =
-      config?.bucketName || process.env.S3_BUCKET_NAME || "lalink-attachments";
+      config?.bucketName ||
+      process.env.S3_BUCKET ||
+      process.env.S3_BUCKET_NAME ||
+      "lalink-attachments";
 
     const endpoint = config?.endpoint || process.env.S3_ENDPOINT;
     const region = config?.region || process.env.S3_REGION || "ap-southeast-1";
@@ -92,6 +95,26 @@ export class S3StorageService implements IStorageService {
     });
 
     await this.client.send(command);
+  }
+
+  /**
+   * Get object stream/buffer from S3 bucket
+   */
+  async getObject(key: string): Promise<Buffer | null> {
+    if (this.isMockMode) return null;
+    try {
+      const command = new GetObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+      });
+      const response = await this.client.send(command);
+      if (!response.Body) return null;
+      const byteArray = await response.Body.transformToByteArray();
+      return Buffer.from(byteArray);
+    } catch (err) {
+      console.error("S3 getObject error:", err);
+      return null;
+    }
   }
 
   /**

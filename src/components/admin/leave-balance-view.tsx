@@ -27,6 +27,7 @@ import {
   Sliders,
   Users,
 } from "lucide-react";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 import {
   adjustLeaveBalanceAction,
   batchAdjustLeaveBalanceAction,
@@ -77,6 +78,9 @@ export function LeaveBalanceView({
 }: LeaveBalanceViewProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [departmentFilter, setDepartmentFilter] = React.useState<string>("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
 
   // 1. Single Employee Adjustment Modal State
   const [adjustTarget, setAdjustTarget] = React.useState<{
@@ -108,6 +112,27 @@ export function LeaveBalanceView({
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  const filteredEmployees = employees.filter((emp) => {
+    const matchesSearch =
+      emp.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      emp.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      emp.employeeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (emp.department &&
+        emp.department.name.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesDept =
+      departmentFilter === "ALL" ||
+      (emp.department && emp.department.name === departmentFilter);
+
+    return matchesSearch && matchesDept;
+  });
+
+  const totalPages = Math.ceil(filteredEmployees.length / pageSize) || 1;
+  const paginatedEmployees = filteredEmployees.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   function openAdjustment(
     employee: SerializedBalanceEmployee,
@@ -184,16 +209,6 @@ export function LeaveBalanceView({
     }
   }
 
-  const filteredEmployees = employees.filter((emp) => {
-    return (
-      emp.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.employeeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (emp.department &&
-        emp.department.name.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-  });
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -223,19 +238,43 @@ export function LeaveBalanceView({
         </Button>
       </div>
 
-      {/* Search Bar */}
+      {/* Search & Filter Bar */}
       <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl">
-        <CardContent className="p-4">
+        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="relative w-full sm:w-80">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
             <Input
               type="text"
               placeholder="ค้นหาพนักงาน, รหัส, หรือแผนก..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
               className="pl-9 h-9 rounded-xl text-xs w-full"
             />
           </div>
+
+          {departments.length > 0 && (
+            <div className="flex items-center space-x-1.5 self-start sm:self-auto">
+              <span className="text-xs font-semibold text-[#64748d]">แผนก:</span>
+              <Select
+                value={departmentFilter}
+                onChange={(e) => {
+                  setDepartmentFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 rounded-xl text-xs w-44"
+              >
+                <option value="ALL">ทุกแผนก (ทั้งหมด)</option>
+                {departments.map((d) => (
+                  <option key={d.id} value={d.name}>
+                    {d.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -257,17 +296,17 @@ export function LeaveBalanceView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e3e8ee]/70">
-                {filteredEmployees.length === 0 ? (
+                {paginatedEmployees.length === 0 ? (
                   <tr>
                     <td
                       colSpan={4}
                       className="py-12 text-center text-[#64748d]"
                     >
-                      ไม่พบข้อมูลพนักงาน
+                      ไม่พบข้อมูลพนักงานตามเงื่อนไขที่ระบุ
                     </td>
                   </tr>
                 ) : (
-                  filteredEmployees.map((emp) => (
+                  paginatedEmployees.map((emp) => (
                     <tr
                       key={emp.id}
                       className="hover:bg-[#f6f9fc]/70 transition-colors"
@@ -288,19 +327,15 @@ export function LeaveBalanceView({
                       <td className="py-3.5 px-4">
                         <div className="flex flex-wrap gap-1.5">
                           {emp.balances.length === 0 ? (
-                            <span className="text-[#64748d] italic text-[11px]">
-                              ยังไม่มีโควตาตั้งต้น
+                            <span className="text-[#64748d] text-[11px]">
+                              ยังไม่มีโควตาวันลา
                             </span>
                           ) : (
                             emp.balances.map((b) => (
                               <button
                                 key={b.id}
-                                type="button"
-                                onClick={() =>
-                                  openAdjustment(emp, b.leaveTypeId)
-                                }
-                                className="inline-flex items-center space-x-1.5 bg-[#f6f9fc] hover:bg-[#e3e8ee]/80 border border-[#e3e8ee] rounded-lg px-2 py-1 text-[11px] transition-colors cursor-pointer"
-                                title="คลิกเพื่อปรับปรุงยอด"
+                                onClick={() => openAdjustment(emp, b.leaveTypeId)}
+                                className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-lg bg-[#f6f9fc] hover:bg-[#533afd]/10 border border-[#e3e8ee] hover:border-[#533afd]/30 transition-colors text-left cursor-pointer"
                               >
                                 <span className="font-semibold text-[#0d253d]">
                                   {b.leaveTypeName}:
@@ -334,6 +369,15 @@ export function LeaveBalanceView({
               </tbody>
             </table>
           </div>
+
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredEmployees.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
 

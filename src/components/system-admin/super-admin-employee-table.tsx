@@ -39,6 +39,8 @@ import {
   Shield,
 } from "lucide-react";
 import { superAdminUnlinkLineAction } from "@/features/employee";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { toast } from "@/components/ui/toast";
 
 export interface SerializedSuperAdminEmployee {
   id: string;
@@ -80,6 +82,8 @@ export function SuperAdminEmployeeTable({
   const [companyFilter, setCompanyFilter] = React.useState<string>("ALL");
   const [statusFilter, setStatusFilter] = React.useState<string>("ALL");
   const [lineFilter, setLineFilter] = React.useState<string>("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
 
   // Unlink LINE State
   const [unlinkTarget, setUnlinkTarget] = React.useState<SerializedSuperAdminEmployee | null>(null);
@@ -97,9 +101,10 @@ export function SuperAdminEmployeeTable({
 
     if (result.success) {
       setUnlinkTarget(null);
+      toast.success(result.message || "ปลดการผูกบัญชี LINE เรียบร้อยแล้ว");
       router.refresh();
     } else {
-      alert(result.message || "เกิดข้อผิดพลาดในการปลด LINE");
+      toast.error(result.message || "ไม่สามารถปลดการผูก LINE ได้");
     }
   }
 
@@ -108,8 +113,8 @@ export function SuperAdminEmployeeTable({
       emp.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       emp.employeeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.company.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.company.code.toLowerCase().includes(searchTerm.toLowerCase());
+      (emp.email && emp.email.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      emp.company.name.toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesCompany = companyFilter === "ALL" || emp.company.id === companyFilter;
     const matchesStatus = statusFilter === "ALL" || emp.status === statusFilter;
@@ -120,6 +125,12 @@ export function SuperAdminEmployeeTable({
 
     return matchesSearch && matchesCompany && matchesStatus && matchesLine;
   });
+
+  const totalPages = Math.ceil(filteredEmployees.length / pageSize) || 1;
+  const paginatedEmployees = filteredEmployees.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   return (
     <div className="space-y-6">
@@ -206,14 +217,14 @@ export function SuperAdminEmployeeTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e3e8ee]/70">
-                {filteredEmployees.length === 0 ? (
+                {paginatedEmployees.length === 0 ? (
                   <tr>
                     <td colSpan={7} className="py-12 text-center text-[#64748d]">
                       ไม่พบข้อมูลพนักงานตามเงื่อนไขที่ระบุ
                     </td>
                   </tr>
                 ) : (
-                  filteredEmployees.map((emp) => (
+                  paginatedEmployees.map((emp) => (
                     <tr key={emp.id} className="hover:bg-[#f6f9fc]/70 transition-colors">
                       <td className="py-3.5 px-4 pl-5 font-mono font-bold text-[#533afd] tabular-nums">
                         {emp.employeeCode}
@@ -281,6 +292,15 @@ export function SuperAdminEmployeeTable({
               </tbody>
             </table>
           </div>
+
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredEmployees.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
 

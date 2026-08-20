@@ -6,6 +6,7 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import {
   Laptop,
   Smartphone,
@@ -19,6 +20,8 @@ import {
   Shield,
 } from "lucide-react";
 import { superAdminRevokeSessionAction } from "@/features/company/super-admin-ops-actions";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { toast } from "@/components/ui/toast";
 
 export interface SerializedUserSession {
   id: string;
@@ -44,6 +47,9 @@ export function SessionManagementView({
 }: SessionManagementViewProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<"ALL" | "ACTIVE" | "REVOKED">("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
   const [isLoading, setIsLoading] = React.useState<string | null>(null);
 
   async function handleRevoke(sessionId: string) {
@@ -52,21 +58,34 @@ export function SessionManagementView({
     setIsLoading(null);
 
     if (result.success) {
+      toast.success(result.message || "เพิกถอน Session สำเร็จ");
       router.refresh();
     } else {
-      alert(result.message || "ไม่สามารถเพิกถอน Session ได้");
+      toast.error(result.message || "ไม่สามารถเพิกถอน Session ได้");
     }
   }
 
   const filteredSessions = sessions.filter((s) => {
-    return (
+    const matchesSearch =
       s.userName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.userEmail.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (s.ipAddress && s.ipAddress.includes(searchTerm)) ||
       (s.companyName &&
-        s.companyName.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+        s.companyName.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesStatus =
+      statusFilter === "ALL" ||
+      (statusFilter === "ACTIVE" && !s.isRevoked) ||
+      (statusFilter === "REVOKED" && s.isRevoked);
+
+    return matchesSearch && matchesStatus;
   });
+
+  const totalPages = Math.ceil(filteredSessions.length / pageSize) || 1;
+  const paginatedSessions = filteredSessions.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   return (
     <div className="space-y-6">
@@ -81,18 +100,45 @@ export function SessionManagementView({
         </p>
       </div>
 
-      {/* Search Bar */}
+      {/* Search & Filter Bar */}
       <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl">
-        <CardContent className="p-4">
+        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="relative w-full sm:w-80">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
             <Input
               type="text"
               placeholder="ค้นหาชื่อ, อีเมล, IP, บริษัท..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
               className="pl-9 h-9 rounded-xl text-xs w-full"
             />
+          </div>
+
+          <div className="flex items-center space-x-1.5 self-start sm:self-auto">
+            {(["ALL", "ACTIVE", "REVOKED"] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(st);
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                  statusFilter === st
+                    ? "bg-[#533afd] text-white font-semibold"
+                    : "bg-[#f6f9fc] text-[#64748d] hover:bg-[#e3e8ee]/80"
+                }`}
+              >
+                {st === "ALL"
+                  ? "ทั้งหมด"
+                  : st === "ACTIVE"
+                    ? "กำลังใช้งาน"
+                    : "เพิกถอนแล้ว"}
+              </button>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -118,17 +164,17 @@ export function SessionManagementView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e3e8ee]/70">
-                {filteredSessions.length === 0 ? (
+                {paginatedSessions.length === 0 ? (
                   <tr>
                     <td
                       colSpan={7}
                       className="py-12 text-center text-[#64748d]"
                     >
-                      ไม่พบข้อมูล Session ในระบบ
+                      ไม่พบข้อมูล Session ในระบบตามเงื่อนไขที่ระบุ
                     </td>
                   </tr>
                 ) : (
-                  filteredSessions.map((s) => (
+                  paginatedSessions.map((s) => (
                     <tr
                       key={s.id}
                       className="hover:bg-[#f6f9fc]/70 transition-colors"
@@ -152,31 +198,30 @@ export function SessionManagementView({
                             </span>
                           </div>
                         ) : (
-                          <span className="text-[#64748d] italic">
+                          <span className="text-[#533afd] font-semibold italic text-[11px]">
                             Platform Central
                           </span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4">
-                        <div className="flex items-center space-x-1.5 text-[#0d253d]">
+                      <td className="py-3.5 px-4 text-[#64748d]">
+                        <div className="flex items-center space-x-1.5">
                           {s.device === "Mobile" ? (
-                            <Smartphone className="h-3.5 w-3.5 text-[#64748d]" />
+                            <Smartphone className="h-3.5 w-3.5 text-[#533afd]" />
+                          ) : s.device === "Tablet" ? (
+                            <Tablet className="h-3.5 w-3.5 text-[#533afd]" />
                           ) : (
-                            <Laptop className="h-3.5 w-3.5 text-[#64748d]" />
+                            <Laptop className="h-3.5 w-3.5 text-[#533afd]" />
                           )}
                           <span>
-                            {s.browser || "Chrome"} on {s.os || "Windows"}
+                            {s.browser || "Unknown"} on {s.os || "Unknown"}
                           </span>
                         </div>
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-[#533afd] font-semibold">
-                        {s.ipAddress || "127.0.0.1"}
+                      <td className="py-3.5 px-4 font-mono text-[#0d253d]">
+                        {s.ipAddress || "-"}
                       </td>
                       <td className="py-3.5 px-4 text-[#64748d] tabular-nums">
-                        {new Date(s.lastActiveAt).toLocaleTimeString("th-TH", {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
+                        {new Date(s.lastActiveAt).toLocaleString("th-TH")}
                       </td>
                       <td className="py-3.5 px-4">
                         {s.isRevoked ? (
@@ -221,6 +266,15 @@ export function SessionManagementView({
               </tbody>
             </table>
           </div>
+
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredSessions.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
     </div>

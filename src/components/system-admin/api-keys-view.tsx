@@ -15,6 +15,16 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
+import {
   Key,
   Plus,
   Copy,
@@ -24,11 +34,14 @@ import {
   Trash2,
   Shield,
   Clock,
+  Search,
 } from "lucide-react";
 import {
   createApiKeyAction,
   revokeApiKeyAction,
 } from "@/features/company/super-admin-ops-actions";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { toast } from "@/components/ui/toast";
 
 export interface SerializedApiKey {
   id: string;
@@ -47,11 +60,18 @@ interface ApiKeysViewProps {
 
 export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
   const router = useRouter();
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<"ALL" | "ACTIVE" | "REVOKED">("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
+
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const [createdSecret, setCreatedSecret] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
   const [isLoading, setIsLoading] = React.useState(false);
+  const [revokeTarget, setRevokeTarget] = React.useState<SerializedApiKey | null>(null);
+  const [isRevoking, setIsRevoking] = React.useState(false);
 
   async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -63,25 +83,25 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
     if (result.success && result.data) {
       setCreatedSecret((result.data as any).fullApiKey);
       setName("");
+      toast.success("สร้าง API Key สำเร็จ กรุณาคัดลอกเก็บไว้");
       router.refresh();
     } else {
-      alert(result.message || "เกิดข้อผิดพลาดในการสร้าง API Key");
+      toast.error(result.message || "เกิดข้อผิดพลาดในการสร้าง API Key");
     }
   }
 
-  async function handleRevoke(id: string) {
-    if (
-      !confirm(
-        "คุณต้องการเพิกถอน API Key นี้ใช่หรือไม่? ระบบที่เชื่อมต่ออยู่จะไม่สามารถใช้งานได้อีกต่อไป",
-      )
-    ) {
-      return;
-    }
-    const result = await revokeApiKeyAction(id);
+  async function handleRevokeConfirm() {
+    if (!revokeTarget) return;
+    setIsRevoking(true);
+    const result = await revokeApiKeyAction(revokeTarget.id);
+    setIsRevoking(false);
+
     if (result.success) {
+      setRevokeTarget(null);
+      toast.success(result.message || "เพิกถอน API Key เรียบร้อยแล้ว");
       router.refresh();
     } else {
-      alert(result.message || "ไม่สามารถเพิกถอน Key ได้");
+      toast.error(result.message || "ไม่สามารถเพิกถอน Key ได้");
     }
   }
 
@@ -92,60 +112,124 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  const filteredApiKeys = apiKeys.filter((k) => {
+    const matchesSearch =
+      k.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      k.keyPrefix.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesStatus =
+      statusFilter === "ALL" ||
+      (statusFilter === "ACTIVE" && !k.isRevoked) ||
+      (statusFilter === "REVOKED" && k.isRevoked);
+
+    return matchesSearch && matchesStatus;
+  });
+
+  const totalPages = Math.ceil(filteredApiKeys.length / pageSize) || 1;
+  const paginatedApiKeys = filteredApiKeys.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-[#0d253d] tracking-tight">
-            จัดการกุญแจเชื่อมต่อภายนอก (API Keys)
+            การจัดการ API Keys (API Keys Management)
           </h1>
           <p className="text-xs text-[#64748d] mt-0.5">
-            ออกและควบคุมสิทธิ์ API Key สำหรับเชื่อมต่อ Third-Party Integration
-            และระบบภายนอก
+            สร้างและเพิกถอน Key สำหรับเชื่อมต่อ API ภายนอกหรือระบบ Microservices
           </p>
         </div>
 
         <Button
           onClick={() => {
-            setIsCreateOpen(true);
             setCreatedSecret(null);
+            setName("");
+            setIsCreateOpen(true);
           }}
-          className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white px-5 h-9 text-xs font-semibold shadow-sm"
+          className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white px-4 h-9 text-xs font-semibold shadow-xs"
         >
-          <Plus className="h-4 w-4 mr-1.5" /> สร้าง API Key ใหม่
+          <Plus className="h-4 w-4 mr-1.5" />
+          สร้าง API Key ใหม่
         </Button>
       </div>
 
-      {/* API Keys Table */}
+      {/* Search & Filter Bar */}
+      <Card className="border-[#e3e8ee] bg-white shadow-xs rounded-2xl">
+        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="relative w-full sm:w-80">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
+            <Input
+              type="text"
+              placeholder="ค้นหาชื่อ Key หรือ Prefix..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-9 h-9 rounded-xl text-xs w-full"
+            />
+          </div>
+
+          <div className="flex items-center space-x-1.5 self-start sm:self-auto">
+            {(["ALL", "ACTIVE", "REVOKED"] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(st);
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                  statusFilter === st
+                    ? "bg-[#533afd] text-white font-semibold"
+                    : "bg-[#f6f9fc] text-[#64748d] hover:bg-[#e3e8ee]/80"
+                }`}
+              >
+                {st === "ALL"
+                  ? "ทั้งหมด"
+                  : st === "ACTIVE"
+                    ? "ใช้งานได้"
+                    : "เพิกถอนแล้ว"}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Keys Table */}
       <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden">
+        <CardHeader className="p-4 border-b border-[#e3e8ee] bg-[#f6f9fc]/50">
+          <CardTitle className="text-sm font-semibold text-[#0d253d] flex items-center">
+            <Key className="h-4 w-4 text-[#533afd] mr-2" />
+            รายการ API Keys ทั้งหมด ({filteredApiKeys.length} รายการ)
+          </CardTitle>
+        </CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
               <thead className="border-b border-[#e3e8ee] text-[#64748d] uppercase bg-[#f6f9fc]">
                 <tr>
-                  <th className="py-3.5 px-4 pl-5 font-semibold">ชื่อ Key</th>
-                  <th className="py-3.5 px-4 font-semibold">Prefix</th>
+                  <th className="py-3.5 px-4 pl-5 font-semibold">ชื่อระบบ / Key Name</th>
+                  <th className="py-3.5 px-4 font-semibold">Key Prefix</th>
                   <th className="py-3.5 px-4 font-semibold">สิทธิ์ (Scopes)</th>
-                  <th className="py-3.5 px-4 font-semibold">ใช้งานล่าสุด</th>
+                  <th className="py-3.5 px-4 font-semibold">สร้างเมื่อ</th>
                   <th className="py-3.5 px-4 font-semibold">สถานะ</th>
-                  <th className="py-3.5 px-4 pr-5 text-right font-semibold">
-                    จัดการ
-                  </th>
+                  <th className="py-3.5 px-4 pr-5 text-right font-semibold">จัดการ</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e3e8ee]/70">
-                {apiKeys.length === 0 ? (
+                {paginatedApiKeys.length === 0 ? (
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="py-12 text-center text-[#64748d]"
-                    >
-                      ยังไม่มี API Key ในระบบ
+                    <td colSpan={6} className="py-12 text-center text-[#64748d]">
+                      ไม่พบ API Key ตามเงื่อนไขที่ระบุ
                     </td>
                   </tr>
                 ) : (
-                  apiKeys.map((k) => (
+                  paginatedApiKeys.map((k) => (
                     <tr
                       key={k.id}
                       className="hover:bg-[#f6f9fc]/70 transition-colors"
@@ -153,31 +237,37 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
                       <td className="py-3.5 px-4 pl-5 font-bold text-[#0d253d]">
                         {k.name}
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-[#533afd] font-semibold">
-                        {k.keyPrefix}...
+                      <td className="py-3.5 px-4 font-mono font-bold text-[#533afd]">
+                        {k.keyPrefix}••••••••
                       </td>
                       <td className="py-3.5 px-4">
-                        <span className="font-mono text-[10px] bg-[#f6f9fc] border border-[#e3e8ee] px-2 py-0.5 rounded-md">
-                          {k.permissions.join(", ")}
-                        </span>
+                        <div className="flex flex-wrap gap-1">
+                          {k.permissions.map((p, idx) => (
+                            <Badge
+                              key={idx}
+                              variant="secondary"
+                              className="text-[10px] font-mono rounded-full"
+                            >
+                              {p}
+                            </Badge>
+                          ))}
+                        </div>
                       </td>
-                      <td className="py-3.5 px-4 text-[#64748d] tabular-nums">
-                        {k.lastUsedAt
-                          ? new Date(k.lastUsedAt).toLocaleDateString("th-TH")
-                          : "ยังไม่เคยใช้งาน"}
+                      <td className="py-3.5 px-4 text-[#64748d] font-mono text-[11px]">
+                        {new Date(k.createdAt).toLocaleDateString("th-TH")}
                       </td>
                       <td className="py-3.5 px-4">
                         {k.isRevoked ? (
                           <Badge
                             variant="destructive"
-                            className="text-[10px] rounded-full px-2"
+                            className="text-[10px] rounded-full"
                           >
-                            เพิกถอนแล้ว
+                            เพิกถอนแล้ว (Revoked)
                           </Badge>
                         ) : (
                           <Badge
                             variant="success"
-                            className="text-[10px] rounded-full px-2"
+                            className="text-[10px] rounded-full"
                           >
                             ใช้งานได้ (Active)
                           </Badge>
@@ -188,8 +278,8 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleRevoke(k.id)}
-                            className="h-7 text-xs rounded-full px-3 text-[#ea2261] border-[#fecdd3] hover:bg-[#ffe4e6] font-semibold"
+                            onClick={() => setRevokeTarget(k)}
+                            className="h-7 text-xs rounded-full px-3 text-[#ea2261] border-[#fecdd3] hover:bg-[#ffe4e6] font-semibold cursor-pointer"
                           >
                             เพิกถอน
                           </Button>
@@ -201,6 +291,15 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
               </tbody>
             </table>
           </div>
+
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredApiKeys.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
 
@@ -222,88 +321,125 @@ export function ApiKeysView({ apiKeys }: ApiKeysViewProps) {
 
           {createdSecret ? (
             <div className="space-y-4 my-2">
-              <div className="p-3 bg-[#ecfdf5] border border-[#a7f3d0] rounded-xl text-[#059669] text-xs font-semibold flex items-center">
-                <CheckCircle2 className="h-4 w-4 mr-1.5 shrink-0" />
-                สร้าง API Key สำเร็จ! กรุณาคัดลอกไว้ทันที
-                (ระบบจะไม่แสดงคีย์นี้อีก)
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-[#0d253d]">
-                  Secret API Key:
-                </label>
+              <div className="p-3 bg-[#f6f9fc] border border-[#e3e8ee] rounded-xl space-y-1.5">
+                <p className="text-xs font-semibold text-[#0d253d]">
+                  API Key ของคุณ (แสดงเพียงครั้งเดียว):
+                </p>
                 <div className="flex items-center space-x-2">
                   <Input
-                    value={createdSecret}
                     readOnly
-                    className="h-10 rounded-xl font-mono text-xs text-[#533afd] bg-[#f6f9fc]"
+                    value={createdSecret}
+                    className="font-mono text-xs h-8 bg-white select-all"
                   />
                   <Button
                     type="button"
+                    variant="outline"
+                    size="sm"
                     onClick={handleCopySecret}
-                    className="rounded-xl h-10 px-4 bg-[#533afd] text-white"
+                    className="h-8 shrink-0 text-xs"
                   >
-                    <Copy className="h-4 w-4 mr-1" />
-                    {copied ? "คัดลอกแล้ว!" : "คัดลอก"}
+                    {copied ? (
+                      <span className="text-[#059669] flex items-center">
+                        <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> คัดลอกแล้ว
+                      </span>
+                    ) : (
+                      <span className="flex items-center">
+                        <Copy className="h-3.5 w-3.5 mr-1" /> คัดลอก
+                      </span>
+                    )}
                   </Button>
                 </div>
+                <p className="text-[11px] text-[#ea2261] flex items-center mt-1">
+                  <AlertCircle className="h-3 w-3 mr-1" />
+                  โปรดบันทึก Key นี้ในที่ปลอดภัย ระบบจะไม่สามารถแสดง Key นี้ซ้ำได้อีก
+                </p>
               </div>
 
-              <DialogFooter className="pt-2 border-t border-[#e3e8ee]">
+              <DialogFooter>
                 <Button
-                  type="button"
                   onClick={() => setIsCreateOpen(false)}
-                  className="rounded-full text-xs h-9 px-5 bg-[#0d253d] text-white"
+                  className="w-full rounded-full bg-[#533afd] text-white text-xs h-9"
                 >
-                  เสร็จสิ้น
+                  ปิดหน้าต่าง
                 </Button>
               </DialogFooter>
             </div>
           ) : (
-            <form onSubmit={handleCreate} className="space-y-3.5 mt-2">
-              <div className="space-y-1">
+            <form onSubmit={handleCreate} className="space-y-4 my-2">
+              <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-[#0d253d]">
-                  ชื่อกุญแจ (Key Name) <span className="text-[#ea2261]">*</span>
+                  ชื่อ API Key <span className="text-[#ea2261]">*</span>
                 </label>
                 <Input
-                  placeholder="เช่น Payroll System, ERP Integration"
+                  required
+                  placeholder="เช่น Payroll Sync System, HR External Bot"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  required
-                  disabled={isLoading}
-                  className="h-9 rounded-xl text-xs"
+                  className="text-xs h-9 rounded-xl"
                 />
               </div>
 
-              <DialogFooter className="mt-6 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
+              <DialogFooter className="mt-5">
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setIsCreateOpen(false)}
-                  disabled={isLoading}
-                  className="rounded-full text-xs h-9 px-4"
+                  className="rounded-full text-xs h-9"
                 >
                   ยกเลิก
                 </Button>
                 <Button
                   type="submit"
                   disabled={isLoading}
-                  className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] text-xs h-9 px-5 font-semibold"
+                  className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white text-xs h-9 px-4"
                 >
                   {isLoading ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      กำลังสร้าง...
-                    </>
-                  ) : (
-                    "สร้าง API Key"
-                  )}
+                    <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                  ) : null}
+                  สร้าง Key
                 </Button>
               </DialogFooter>
             </form>
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Revoke Confirmation Dialog */}
+      <AlertDialog
+        open={!!revokeTarget}
+        onOpenChange={(open) => !open && setRevokeTarget(null)}
+      >
+        <AlertDialogContent className="rounded-2xl p-6">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
+              <AlertCircle className="h-5 w-5 text-[#ea2261] mr-2" />
+              ยืนยันการเพิกถอน API Key?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-[#64748d]">
+              คุณกำลังจะเพิกถอน Key &ldquo;{revokeTarget?.name}&rdquo; ({revokeTarget?.keyPrefix}••••••••) 
+              ระบบที่เชื่อมต่ออยู่จะไม่สามารถเข้าถึง API ได้อีกต่อไป
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="mt-4">
+            <AlertDialogCancel
+              disabled={isRevoking}
+              className="rounded-full text-xs h-9"
+            >
+              ยกเลิก
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleRevokeConfirm}
+              disabled={isRevoking}
+              className="rounded-full bg-[#ea2261] hover:bg-[#d91452] text-white text-xs h-9 px-4"
+            >
+              {isRevoking && (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              )}
+              ยืนยันเพิกถอน
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

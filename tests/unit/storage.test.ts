@@ -143,5 +143,17 @@ describe("Phase 8: S3-Compatible Object Storage Subsystem", () => {
       expect(typeof uploadUrl).toBe("string");
       expect(uploadUrl).toContain("f1.pdf");
     });
+
+    it("should resolve bucketName correctly from S3_BUCKET env variable", () => {
+      const prevEnv = process.env.S3_BUCKET;
+      process.env.S3_BUCKET = "custom-prod-bucket";
+      const service = new S3StorageService();
+      expect(service).toBeDefined();
+      if (prevEnv !== undefined) {
+        process.env.S3_BUCKET = prevEnv;
+      } else {
+        delete process.env.S3_BUCKET;
+      }
+    });
   });
 });

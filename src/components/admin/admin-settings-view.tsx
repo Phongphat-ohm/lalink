@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import {
   Card,
   CardHeader,
@@ -25,6 +26,8 @@ import {
   Smartphone,
   ExternalLink,
   Download,
+  CreditCard,
+  Sparkles,
 } from "lucide-react";
 import { CompanyQrModal } from "@/components/admin/company-qr-modal";
 
@@ -299,6 +302,30 @@ export function AdminSettingsView({
 
         {/* Right Column: LINE LIFF & Security Info (1 col) */}
         <div className="space-y-6">
+          {/* SaaS Subscription Quick Card */}
+          <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden">
+            <CardHeader className="p-4 pb-2 border-b border-[#e3e8ee] bg-[#f6f9fc]/50">
+              <CardTitle className="text-sm font-semibold text-[#0d253d] flex items-center">
+                <CreditCard className="h-4 w-4 text-[#533afd] mr-2" />
+                แพ็กเกจและการสมัครสมาชิก (SaaS)
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-4 space-y-3 text-xs text-[#64748d]">
+              <p>
+                ตรวจสอบโควตาพนักงาน สิทธิ์การใช้งาน และระยะเวลาของแพ็กเกจองค์กร
+              </p>
+              <Link href="/admin/subscription" className="block w-full">
+                <Button
+                  type="button"
+                  className="w-full h-8 rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white text-xs font-semibold shadow-xs"
+                >
+                  <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                  ดูรายละเอียดแพ็กเกจ & โควตา
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
+
           {/* LINE LIFF Employee Connect Guide */}
           <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden">
             <CardHeader className="p-4 pb-2 border-b border-[#e3e8ee] bg-[#f6f9fc]/50">

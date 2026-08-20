@@ -25,15 +25,18 @@ export async function GET(
       return new NextResponse("Backup not found", { status: 404 });
     }
 
+    // Direct verified stream from local cache or S3
     const fileBuffer = await BackupService.getBackupFile(backupLog.filename);
-    if (!fileBuffer) {
-      return new NextResponse("Backup file not found on disk", { status: 404 });
+    if (!fileBuffer || fileBuffer.length === 0) {
+      return new NextResponse("Backup file not found or empty", { status: 404 });
     }
 
     const headers = new Headers();
-    headers.set("Content-Type", "application/gzip");
+    const isZip = backupLog.filename.endsWith(".zip");
+    headers.set("Content-Type", isZip ? "application/zip" : "application/gzip");
     headers.set("Content-Disposition", `attachment; filename="${backupLog.filename}"`);
     headers.set("Content-Length", fileBuffer.length.toString());
+    headers.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
 
     return new NextResponse(new Uint8Array(fileBuffer), {
       status: 200,

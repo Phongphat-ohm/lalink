@@ -23,11 +23,13 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
-import { Briefcase, Plus, Trash2, Users, Loader2 } from "lucide-react";
+import { Briefcase, Plus, Trash2, Users, Loader2, Search } from "lucide-react";
 import {
   createPositionAction,
   deletePositionAction,
 } from "@/features/organization/position-actions";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { toast } from "@/components/ui/toast";
 
 export interface SerializedPositionItem {
   id: string;
@@ -43,6 +45,10 @@ interface PositionViewProps {
 
 export function PositionView({ positions }: PositionViewProps) {
   const router = useRouter();
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
+
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [deleteTarget, setDeleteTarget] =
     React.useState<SerializedPositionItem | null>(null);
@@ -84,11 +90,25 @@ export function PositionView({ positions }: PositionViewProps) {
 
     if (result.success) {
       setDeleteTarget(null);
+      toast.success(result.message || "ลบตำแหน่งเรียบร้อยแล้ว");
       router.refresh();
     } else {
-      alert(result.message || "ไม่สามารถลบตำแหน่งได้");
+      toast.error(result.message || "ไม่สามารถลบตำแหน่งได้");
     }
   }
+
+  const filteredPositions = positions.filter((p) => {
+    return (
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.code && p.code.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  });
+
+  const totalPages = Math.ceil(filteredPositions.length / pageSize) || 1;
+  const paginatedPositions = filteredPositions.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   return (
     <div className="space-y-6">
@@ -114,6 +134,25 @@ export function PositionView({ positions }: PositionViewProps) {
         </Button>
       </div>
 
+      {/* Search Bar */}
+      <Card className="border-[#e3e8ee] bg-white shadow-xs rounded-2xl">
+        <CardContent className="p-4">
+          <div className="relative w-full sm:w-80">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
+            <Input
+              type="text"
+              placeholder="ค้นหาชื่อตำแหน่งหรือรหัส..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-9 h-9 rounded-xl text-xs w-full"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Positions Table */}
       <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden">
         <CardContent className="p-0">
@@ -133,17 +172,17 @@ export function PositionView({ positions }: PositionViewProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e3e8ee]/70">
-                {positions.length === 0 ? (
+                {paginatedPositions.length === 0 ? (
                   <tr>
                     <td
                       colSpan={5}
                       className="py-12 text-center text-[#64748d]"
                     >
-                      ยังไม่มีข้อมูลตำแหน่งงานในระบบ
+                      ไม่พบข้อมูลตำแหน่งงานตามเงื่อนไขที่ระบุ
                     </td>
                   </tr>
                 ) : (
-                  positions.map((p) => (
+                  paginatedPositions.map((p) => (
                     <tr
                       key={p.id}
                       className="hover:bg-[#f6f9fc]/70 transition-colors"
@@ -180,6 +219,15 @@ export function PositionView({ positions }: PositionViewProps) {
               </tbody>
             </table>
           </div>
+
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredPositions.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
 
@@ -200,95 +248,92 @@ export function PositionView({ positions }: PositionViewProps) {
           </DialogHeader>
 
           {error && (
-            <div className="p-2.5 rounded-xl bg-[#ffe4e6] text-[#ea2261] text-xs">
+            <div className="my-2 p-2.5 rounded-xl bg-[#ffe4e6] text-[#ea2261] text-xs">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleCreate} className="space-y-3.5 mt-2">
-            <div className="space-y-1">
+          <form onSubmit={handleCreate} className="space-y-4 my-2">
+            <div className="space-y-1.5">
               <label className="text-xs font-semibold text-[#0d253d]">
-                รหัสตำแหน่ง (Position Code)
+                รหัสตำแหน่ง
               </label>
               <Input
-                placeholder="เช่น DEV, HR-MGR, ACC"
+                placeholder="เช่น DEV-01, MKT-02"
                 value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
-                disabled={isLoading}
-                className="h-9 rounded-xl text-xs font-mono font-bold"
+                onChange={(e) => setCode(e.target.value)}
+                className="text-xs h-9 rounded-xl"
               />
             </div>
 
-            <div className="space-y-1">
+            <div className="space-y-1.5">
               <label className="text-xs font-semibold text-[#0d253d]">
                 ชื่อตำแหน่ง <span className="text-[#ea2261]">*</span>
               </label>
               <Input
-                placeholder="เช่น Software Engineer, HR Manager"
+                required
+                placeholder="เช่น Frontend Developer"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                required
-                disabled={isLoading}
-                className="h-9 rounded-xl text-xs"
+                className="text-xs h-9 rounded-xl"
               />
             </div>
 
-            <DialogFooter className="mt-6 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
+            <DialogFooter className="mt-5">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsCreateOpen(false)}
-                disabled={isLoading}
-                className="rounded-full text-xs h-9 px-4"
+                className="rounded-full text-xs h-9"
               >
                 ยกเลิก
               </Button>
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] text-xs h-9 px-5 font-semibold"
+                className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white text-xs h-9 px-4"
               >
                 {isLoading ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    กำลังบันทึก...
-                  </>
-                ) : (
-                  "บันทึกตำแหน่ง"
-                )}
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                ) : null}
+                บันทึก
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation */}
+      {/* Delete Position Dialog */}
       <AlertDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
       >
-        <AlertDialogContent className="max-w-md rounded-2xl p-6">
+        <AlertDialogContent className="rounded-2xl p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base font-bold text-[#0d253d]">
-              ยืนยันการลบตำแหน่ง?
+              ยืนยันการลบตำแหน่งงาน?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-[#64748d]">
-              คุณต้องการลบตำแหน่ง &ldquo;{deleteTarget?.name}&rdquo; ใช่หรือไม่?
+              คุณกำลังจะลบตำแหน่ง &ldquo;{deleteTarget?.name}&rdquo;
+              ออกจากระบบ หากมีพนักงานสังกัดอยู่จะไม่สามารถลบได้
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-4">
             <AlertDialogCancel
               disabled={isLoading}
-              className="rounded-full text-xs h-9 px-4"
+              className="rounded-full text-xs h-9"
             >
               ยกเลิก
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
               disabled={isLoading}
-              className="rounded-full bg-[#ea2261] text-white hover:bg-[#d91452] text-xs h-9 px-5 font-semibold"
+              className="rounded-full bg-[#ea2261] hover:bg-[#d91452] text-white text-xs h-9 px-4"
             >
-              {isLoading ? "กำลังลบ..." : "ลบตำแหน่ง"}
+              {isLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              ) : null}
+              ยืนยันการลบ
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -29,6 +29,8 @@ import {
 } from "lucide-react";
 import { unlinkEmployeeLineAction } from "@/features/employee/line-actions";
 import { CompanyQrModal } from "@/components/admin/company-qr-modal";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { toast } from "@/components/ui/toast";
 
 export interface SerializedLineEmployee {
   id: string;
@@ -55,6 +57,10 @@ export function LineAccountsView({
 }: LineAccountsViewProps) {
   const router = useRouter();
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<"ALL" | "CONNECTED" | "UNLINKED">("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
+
   const [unlinkTarget, setUnlinkTarget] =
     React.useState<SerializedLineEmployee | null>(null);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -72,21 +78,37 @@ export function LineAccountsView({
 
     if (result.success) {
       setUnlinkTarget(null);
+      toast.success(result.message || "ยกเลิกการผูกบัญชี LINE เรียบร้อยแล้ว");
       router.refresh();
     } else {
-      alert(result.message || "ไม่สามารถยกเลิกการเชื่อมต่อได้");
+      toast.error(result.message || "ไม่สามารถยกเลิกการเชื่อมต่อได้");
     }
   }
 
   const filteredEmployees = employees.filter((emp) => {
-    return (
-      emp.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.lastName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      emp.employeeCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    const term = searchTerm.toLowerCase();
+    const matchesSearch =
+      emp.firstName.toLowerCase().includes(term) ||
+      emp.lastName.toLowerCase().includes(term) ||
+      emp.employeeCode.toLowerCase().includes(term) ||
       (emp.departmentName &&
-        emp.departmentName.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
+        emp.departmentName.toLowerCase().includes(term)) ||
+      (emp.positionName &&
+        emp.positionName.toLowerCase().includes(term));
+
+    const matchesStatus =
+      statusFilter === "ALL" ||
+      (statusFilter === "CONNECTED" && emp.isConnected) ||
+      (statusFilter === "UNLINKED" && !emp.isConnected);
+
+    return matchesSearch && matchesStatus;
   });
+
+  const totalPages = Math.ceil(filteredEmployees.length / pageSize) || 1;
+  const paginatedEmployees = filteredEmployees.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   return (
     <div className="space-y-6">
@@ -121,18 +143,45 @@ export function LineAccountsView({
         </div>
       </div>
 
-      {/* Search Bar */}
-      <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl">
-        <CardContent className="p-4">
+      {/* Search & Filter Bar */}
+      <Card className="border-[#e3e8ee] bg-white shadow-xs rounded-2xl">
+        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <div className="relative w-full sm:w-80">
             <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
             <Input
               type="text"
               placeholder="ค้นหาชื่อ, รหัสพนักงาน, แผนก..."
               value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
               className="pl-9 h-9 rounded-xl text-xs w-full"
             />
+          </div>
+
+          <div className="flex items-center space-x-1.5 self-start sm:self-auto">
+            {(["ALL", "CONNECTED", "UNLINKED"] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(st);
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                  statusFilter === st
+                    ? "bg-[#533afd] text-white font-semibold"
+                    : "bg-[#f6f9fc] text-[#64748d] hover:bg-[#e3e8ee]/80"
+                }`}
+              >
+                {st === "ALL"
+                  ? "ทั้งหมด"
+                  : st === "CONNECTED"
+                    ? "เชื่อมต่อแล้ว"
+                    : "ยังไม่เชื่อมต่อ"}
+              </button>
+            ))}
           </div>
         </CardContent>
       </Card>
@@ -156,17 +205,17 @@ export function LineAccountsView({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e3e8ee]/70">
-                {filteredEmployees.length === 0 ? (
+                {paginatedEmployees.length === 0 ? (
                   <tr>
                     <td
                       colSpan={5}
                       className="py-12 text-center text-[#64748d]"
                     >
-                      ไม่พบข้อมูลพนักงาน
+                      ไม่พบข้อมูลพนักงานตามเงื่อนไขที่ระบุ
                     </td>
                   </tr>
                 ) : (
-                  filteredEmployees.map((emp) => (
+                  paginatedEmployees.map((emp) => (
                     <tr
                       key={emp.id}
                       className="hover:bg-[#f6f9fc]/70 transition-colors"
@@ -220,9 +269,7 @@ export function LineAccountsView({
                             <Unlink className="h-3 w-3 mr-1" /> ปลดล็อค LINE
                           </Button>
                         ) : (
-                          <span className="text-[11px] text-[#64748d] italic">
-                            รอพนักงานผูกบัญชี
-                          </span>
+                          <span className="text-[#64748d] text-[11px]">-</span>
                         )}
                       </td>
                     </tr>
@@ -231,45 +278,58 @@ export function LineAccountsView({
               </tbody>
             </table>
           </div>
+
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredEmployees.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
 
-      {/* Unlink Confirmation */}
+      {/* Unlink Confirmation Dialog */}
       <AlertDialog
         open={!!unlinkTarget}
         onOpenChange={(open) => !open && setUnlinkTarget(null)}
       >
-        <AlertDialogContent className="max-w-md rounded-2xl p-6">
+        <AlertDialogContent className="rounded-2xl p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle className="text-base font-bold text-[#0d253d]">
-              ยืนยันการปลดล็อคบัญชี LINE?
+            <AlertDialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
+              <AlertCircle className="h-5 w-5 text-[#ea2261] mr-2" />
+              ยืนยันการยกเลิกการเชื่อมต่อ LINE?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-[#64748d]">
-              คุณต้องการยกเลิกการผูกบัญชี LINE ของ &ldquo;
-              {unlinkTarget?.firstName} {unlinkTarget?.lastName}&rdquo; (
-              {unlinkTarget?.employeeCode}) ใช่หรือไม่? หลังจากปลดล็อคแล้ว
-              พนักงานจะสามารถใช้บัญชี LINE ใหม่ผูกบัญชีเข้ากับรหัสพนักงานนี้ได้
+              คุณกำลังจะปลดการผูกบัญชี LINE ของ{" "}
+              <strong>
+                {unlinkTarget?.firstName} {unlinkTarget?.lastName}
+              </strong>{" "}
+              ({unlinkTarget?.employeeCode})
+              พนักงานจะไม่ได้รับการแจ้งเตือนหรือยื่นคำขอลาผ่าน LINE ได้
+              จนกว่าจะทำการผูกบัญชีใหม่
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-4">
             <AlertDialogCancel
               disabled={isLoading}
-              className="rounded-full text-xs h-9 px-4"
+              className="rounded-full text-xs h-9"
             >
               ยกเลิก
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleUnlinkConfirm}
               disabled={isLoading}
-              className="rounded-full bg-[#ea2261] text-white hover:bg-[#d91452] text-xs h-9 px-5 font-semibold"
+              className="rounded-full bg-[#ea2261] hover:bg-[#d91452] text-white text-xs h-9 px-4"
             >
-              {isLoading ? "กำลังปลดล็อค..." : "ปลดล็อค LINE"}
+              ยืนยันปลดล็อค
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Company QR Code Modal */}
+      {/* QR Code Modal for on-site onboarding */}
       <CompanyQrModal
         open={isQrModalOpen}
         onOpenChange={setIsQrModalOpen}

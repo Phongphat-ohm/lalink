@@ -22,6 +22,7 @@ import {
   UserRound,
   CreditCard,
   Sparkles,
+  Mail,
 } from "lucide-react";
 import { logoutAdminAction } from "@/features/auth";
 
@@ -29,82 +30,112 @@ interface SystemAdminSidebarProps {
   userName: string;
 }
 
+interface NavigationCategory {
+  title: string;
+  items: {
+    href: string;
+    label: string;
+    icon: React.ElementType;
+    exact?: boolean;
+    badge?: string;
+  }[];
+}
+
 export function SystemAdminSidebar({ userName }: SystemAdminSidebarProps) {
   const pathname = usePathname();
   const [isMobileOpen, setIsMobileOpen] = React.useState(false);
 
-  const navigationItems = [
+  const navigationCategories: NavigationCategory[] = [
     {
-      href: "/system-admin",
-      label: "ภาพรวมระบบ (Overview)",
-      icon: LayoutDashboard,
-      exact: true,
+      title: "ภาพรวมระบบ",
+      items: [
+        {
+          href: "/system-admin",
+          label: "แดชบอร์ดภาพรวม",
+          icon: LayoutDashboard,
+          exact: true,
+        },
+      ],
     },
     {
-      href: "/system-admin/companies",
-      label: "จัดการองค์กร (Tenants)",
-      icon: Building2,
-      exact: false,
+      title: "การจัดการผู้เช่า & SaaS",
+      items: [
+        {
+          href: "/system-admin/companies",
+          label: "องค์กรและบริษัท (Tenants)",
+          icon: Building2,
+        },
+        {
+          href: "/system-admin/plans",
+          label: "แพ็กเกจบริการ (SaaS Plans)",
+          icon: CreditCard,
+        },
+        {
+          href: "/system-admin/subscriptions",
+          label: "การสมัครสมาชิก (Subscriptions)",
+          icon: Sparkles,
+        },
+        {
+          href: "/system-admin/messages",
+          label: "ศูนย์ข้อความ & ซัพพอร์ต (Mailbox)",
+          icon: Mail,
+        },
+      ],
     },
     {
-      href: "/system-admin/plans",
-      label: "แพ็กเกจ SaaS (Plans)",
-      icon: CreditCard,
-      exact: false,
+      title: "ผู้ใช้งาน & ไดเรกทอรี",
+      items: [
+        {
+          href: "/system-admin/users",
+          label: "ผู้ดูแลระบบทั้งหมด (Admins)",
+          icon: Users,
+        },
+        {
+          href: "/system-admin/employees",
+          label: "พนักงานข้ามองค์กร (Employees)",
+          icon: UserCheck,
+        },
+        {
+          href: "/system-admin/sessions",
+          label: "เซสชันที่ทำงานอยู่ (Sessions)",
+          icon: Laptop,
+        },
+      ],
     },
     {
-      href: "/system-admin/subscriptions",
-      label: "การสมัครสมาชิก (Subscriptions)",
-      icon: Sparkles,
-      exact: false,
+      title: "ความปลอดภัย & ตรวจสอบ",
+      items: [
+        {
+          href: "/system-admin/security",
+          label: "ศูนย์ความปลอดภัย & IP Block",
+          icon: ShieldCheck,
+        },
+        {
+          href: "/system-admin/audit-logs",
+          label: "บันทึกกิจกรรม (Audit Logs)",
+          icon: ShieldAlert,
+        },
+        {
+          href: "/system-admin/api-keys",
+          label: "กุญแจเชื่อมต่อ (API Keys)",
+          icon: Key,
+        },
+      ],
     },
     {
-      href: "/system-admin/users",
-      label: "ผู้ดูแลระบบทั้งหมด (Admins)",
-      icon: Users,
-      exact: false,
-    },
-    {
-      href: "/system-admin/employees",
-      label: "พนักงานทั้งหมด (Employees)",
-      icon: UserCheck,
-      exact: false,
-    },
-    {
-      href: "/system-admin/sessions",
-      label: "จัดการ Sessions ทั้งหมด",
-      icon: Laptop,
-      exact: false,
-    },
-    {
-      href: "/system-admin/security",
-      label: "ศูนย์ความปลอดภัย (Security)",
-      icon: ShieldCheck,
-      exact: false,
-    },
-    {
-      href: "/system-admin/audit-logs",
-      label: "บันทึกกิจกรรม (Platform Logs)",
-      icon: ShieldAlert,
-      exact: false,
-    },
-    {
-      href: "/system-admin/health",
-      label: "สถานะระบบ (System Health)",
-      icon: Activity,
-      exact: false,
-    },
-    {
-      href: "/system-admin/backup",
-      label: "สำรองฐานข้อมูล (Backup)",
-      icon: Database,
-      exact: false,
-    },
-    {
-      href: "/system-admin/api-keys",
-      label: "กุญแจเชื่อมต่อ (API Keys)",
-      icon: Key,
-      exact: false,
+      title: "โครงสร้างพื้นฐาน & บำรุงรักษา",
+      items: [
+        {
+          href: "/system-admin/health",
+          label: "สถานะระบบ (System Health)",
+          icon: Activity,
+        },
+        {
+          href: "/system-admin/backup",
+          label: "สำรองฐานข้อมูล (Backup)",
+          icon: Database,
+        },
+      ],
     },
   ];
 
@@ -196,44 +227,51 @@ export function SystemAdminSidebar({ userName }: SystemAdminSidebarProps) {
           </Button>
         </div>
 
-        {/* Navigation Items */}
-        <div className="flex-1 overflow-y-auto px-3 py-5 space-y-1.5">
-          <h3 className="px-3 text-[10px] font-semibold uppercase tracking-wider text-[#64748d]/80 mb-2">
-            ควบคุมระบบส่วนกลาง (Platform Control)
-          </h3>
-          {navigationItems.map((item) => {
-            const Icon = item.icon;
-            const isActive = item.exact
-              ? pathname === item.href
-              : pathname === item.href || pathname.startsWith(item.href + "/");
+        {/* Categorized Navigation Items with independent scroll */}
+        <div className="flex-1 overflow-y-auto px-3 py-4 space-y-5">
+          {navigationCategories.map((category) => (
+            <div key={category.title} className="space-y-1">
+              <div className="px-3 pb-1 text-[10px] font-bold uppercase tracking-wider text-[#64748d]/80 flex items-center justify-between">
+                <span>{category.title}</span>
+              </div>
 
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                onClick={() => setIsMobileOpen(false)}
-                className={`group flex items-center justify-between px-3.5 py-2.5 rounded-full text-xs transition-all ${
-                  isActive
-                    ? "bg-[#533afd]/10 text-[#533afd] font-bold shadow-xs"
-                    : "text-[#64748d] font-medium hover:bg-[#f6f9fc] hover:text-[#0d253d]"
-                }`}
-              >
-                <div className="flex items-center space-x-2.5">
-                  <Icon
-                    className={`h-4 w-4 transition-colors ${
-                      isActive
-                        ? "text-[#533afd]"
-                        : "text-[#64748d]/70 group-hover:text-[#0d253d]"
-                    }`}
-                  />
-                  <span>{item.label}</span>
-                </div>
-                {isActive && (
-                  <ChevronRight className="h-3.5 w-3.5 text-[#533afd]" />
-                )}
-              </Link>
-            );
-          })}
+              <div className="space-y-0.5">
+                {category.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = item.exact
+                    ? pathname === item.href
+                    : pathname === item.href || pathname.startsWith(item.href + "/");
+
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setIsMobileOpen(false)}
+                      className={`group flex items-center justify-between px-3.5 py-2 rounded-xl text-xs transition-all ${
+                        isActive
+                          ? "bg-[#533afd]/10 text-[#533afd] font-bold shadow-xs"
+                          : "text-[#64748d] font-medium hover:bg-[#f6f9fc] hover:text-[#0d253d]"
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2.5 min-w-0">
+                        <Icon
+                          className={`h-4 w-4 shrink-0 transition-colors ${
+                            isActive
+                              ? "text-[#533afd]"
+                              : "text-[#64748d]/70 group-hover:text-[#0d253d]"
+                          }`}
+                        />
+                        <span className="truncate">{item.label}</span>
+                      </div>
+                      {isActive && (
+                        <ChevronRight className="h-3.5 w-3.5 text-[#533afd] shrink-0" />
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
         </div>
 
         {/* User Account & Logout Footer */}

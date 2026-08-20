@@ -36,12 +36,15 @@ import {
   Loader2,
   Building2,
   Pencil,
+  Search,
 } from "lucide-react";
+import { toast } from "@/components/ui/toast";
 import {
   createBranchAction,
   updateBranchAction,
   deleteBranchAction,
 } from "@/features/organization/branch-actions";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 
 export interface SerializedBranch {
   id: string;
@@ -61,6 +64,11 @@ interface BranchViewProps {
 
 export function BranchView({ branches }: BranchViewProps) {
   const router = useRouter();
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [isMainFilter, setIsMainFilter] = React.useState<"ALL" | "MAIN" | "BRANCH">("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(6);
+
   const [isCreateOpen, setIsCreateOpen] = React.useState(false);
   const [deleteTarget, setDeleteTarget] =
     React.useState<SerializedBranch | null>(null);
@@ -120,9 +128,10 @@ export function BranchView({ branches }: BranchViewProps) {
 
     if (result.success) {
       setDeleteTarget(null);
+      toast.success(result.message || "ลบสาขาเรียบร้อยแล้ว");
       router.refresh();
     } else {
-      alert(result.message || "ไม่สามารถลบสาขาได้");
+      toast.error(result.message || "ไม่สามารถลบสาขาได้");
     }
   }
 
@@ -140,6 +149,7 @@ export function BranchView({ branches }: BranchViewProps) {
   async function handleEdit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!editTarget) return;
+
     setIsEditLoading(true);
     setEditError(null);
 
@@ -163,23 +173,48 @@ export function BranchView({ branches }: BranchViewProps) {
     }
   }
 
+  const filteredBranches = branches.filter((b) => {
+    const matchesSearch =
+      b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      b.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (b.address && b.address.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesMain =
+      isMainFilter === "ALL" ||
+      (isMainFilter === "MAIN" && b.isMain) ||
+      (isMainFilter === "BRANCH" && !b.isMain);
+
+    return matchesSearch && matchesMain;
+  });
+
+  const totalPages = Math.ceil(filteredBranches.length / pageSize) || 1;
+  const paginatedBranches = filteredBranches.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-xl sm:text-2xl font-bold text-[#0d253d] tracking-tight">
-            จัดการสาขาองค์กร (Branches)
+            จัดการสาขา (Branches)
           </h1>
           <p className="text-xs text-[#64748d] mt-0.5">
-            กำหนดสาขา สำนักงานใหญ่ และสาขาย่อยของบริษัท
+            จัดการสำนักงานใหญ่และสาขาย่อย พร้อมพิกัดสถานที่และการจัดกลุ่ม
           </p>
         </div>
 
         <Button
           onClick={() => {
-            setIsCreateOpen(true);
+            setCode("");
+            setName("");
+            setAddress("");
+            setPhone("");
+            setIsMain(false);
             setError(null);
+            setIsCreateOpen(true);
           }}
           className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white px-5 h-9 text-xs font-semibold shadow-sm"
         >
@@ -187,15 +222,57 @@ export function BranchView({ branches }: BranchViewProps) {
         </Button>
       </div>
 
-      {/* Branches List */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {branches.length === 0 ? (
-          <div className="sm:col-span-2 lg:col-span-3 text-center py-12 bg-white rounded-2xl border border-dashed border-[#e3e8ee] p-6 text-xs text-[#64748d]">
-            ยังไม่มีข้อมูลสาขาในระบบ กดปุ่ม &ldquo;เพิ่มสาขาใหม่&rdquo;
-            เพื่อเริ่มต้น
+      {/* Search & Filter Bar */}
+      <Card className="border-[#e3e8ee] bg-white shadow-xs rounded-2xl">
+        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="relative w-full sm:w-80">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
+            <Input
+              type="text"
+              placeholder="ค้นหาชื่อสาขา, รหัส หรือที่อยู่..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-9 h-9 rounded-xl text-xs w-full"
+            />
           </div>
-        ) : (
-          branches.map((b) => (
+
+          <div className="flex items-center space-x-1.5 self-start sm:self-auto">
+            {(["ALL", "MAIN", "BRANCH"] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => {
+                  setIsMainFilter(st);
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                  isMainFilter === st
+                    ? "bg-[#533afd] text-white font-semibold"
+                    : "bg-[#f6f9fc] text-[#64748d] hover:bg-[#e3e8ee]/80"
+                }`}
+              >
+                {st === "ALL"
+                  ? "ทั้งหมด"
+                  : st === "MAIN"
+                    ? "สำนักงานใหญ่"
+                    : "สาขาย่อย"}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Branches Grid */}
+      {paginatedBranches.length === 0 ? (
+        <Card className="border-[#e3e8ee] bg-white rounded-2xl p-12 text-center text-xs text-[#64748d]">
+          ไม่พบข้อมูลสาขาตามเงื่อนไขที่ระบุ
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {paginatedBranches.map((b) => (
             <Card
               key={b.id}
               className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden hover:border-[#533afd]/40 transition-colors flex flex-col justify-between"
@@ -265,8 +342,21 @@ export function BranchView({ branches }: BranchViewProps) {
                 </div>
               </CardContent>
             </Card>
-          ))
-        )}
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      <div className="bg-white rounded-2xl border border-[#e3e8ee] p-2">
+        <DataTablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          pageSizeOptions={[6, 12, 24, 48]}
+          totalItems={filteredBranches.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
       </div>
 
       {/* Create Branch Modal */}
@@ -299,10 +389,9 @@ export function BranchView({ branches }: BranchViewProps) {
               <Input
                 placeholder="เช่น HQ, BKK01, CNX02"
                 value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                onChange={(e) => setCode(e.target.value)}
+                className="text-xs h-9 rounded-xl uppercase"
                 required
-                disabled={isLoading}
-                className="h-9 rounded-xl text-xs font-mono font-bold"
               />
             </div>
 
@@ -311,12 +400,23 @@ export function BranchView({ branches }: BranchViewProps) {
                 ชื่อสาขา <span className="text-[#ea2261]">*</span>
               </label>
               <Input
-                placeholder="เช่น สำนักงานใหญ่, สาขาเชียงใหม่"
+                placeholder="เช่น สำนักงานใหญ่ สาทร"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                className="text-xs h-9 rounded-xl"
                 required
-                disabled={isLoading}
-                className="h-9 rounded-xl text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                ที่อยู่สาขา
+              </label>
+              <Input
+                placeholder="ระบุที่ตั้งสาขา"
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="text-xs h-9 rounded-xl"
               />
             </div>
 
@@ -328,64 +428,44 @@ export function BranchView({ branches }: BranchViewProps) {
                 placeholder="เช่น 02-123-4567"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                disabled={isLoading}
-                className="h-9 rounded-xl text-xs"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-[#0d253d]">
-                ที่อยู่สาขา
-              </label>
-              <textarea
-                rows={2}
-                placeholder="ที่อยู่ ถนน แขวง/ตำบล จังหวัด"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                disabled={isLoading}
-                className="w-full rounded-xl border border-[#a8c3de]/60 p-2.5 text-xs focus:border-[#533afd] focus:outline-none"
+                className="text-xs h-9 rounded-xl"
               />
             </div>
 
             <div className="flex items-center space-x-2 pt-1">
               <input
                 type="checkbox"
-                id="isMain"
+                id="isMainCreate"
                 checked={isMain}
                 onChange={(e) => setIsMain(e.target.checked)}
-                className="rounded border-[#e3e8ee] text-[#533afd] focus:ring-[#533afd]"
+                className="rounded border-[#a8c3de] text-[#533afd] focus:ring-[#533afd]"
               />
               <label
-                htmlFor="isMain"
+                htmlFor="isMainCreate"
                 className="text-xs font-medium text-[#0d253d] cursor-pointer"
               >
-                ตั้งเป็นสำนักงานใหญ่ (Main Branch)
+                กำหนดเป็นสำนักงานใหญ่ (Main Branch)
               </label>
             </div>
 
-            <DialogFooter className="mt-6 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
+            <DialogFooter className="mt-5">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsCreateOpen(false)}
-                disabled={isLoading}
-                className="rounded-full text-xs h-9 px-4"
+                className="rounded-full text-xs h-9"
               >
                 ยกเลิก
               </Button>
               <Button
                 type="submit"
                 disabled={isLoading}
-                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] text-xs h-9 px-5 font-semibold"
+                className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white text-xs h-9 px-4"
               >
                 {isLoading ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    กำลังบันทึก...
-                  </>
-                ) : (
-                  "บันทึกสาขา"
-                )}
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                ) : null}
+                บันทึก
               </Button>
             </DialogFooter>
           </form>
@@ -395,20 +475,16 @@ export function BranchView({ branches }: BranchViewProps) {
       {/* Edit Branch Modal */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
         <DialogContent
-          onClose={() => {
-            setIsEditOpen(false);
-            setEditTarget(null);
-          }}
+          onClose={() => setIsEditOpen(false)}
           className="max-w-md rounded-2xl p-6"
         >
           <DialogHeader>
             <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
               <Pencil className="h-5 w-5 text-[#533afd] mr-2" />
-              แก้ไขสาขา
+              แก้ไขข้อมูลสาขา
             </DialogTitle>
             <DialogDescription className="text-xs text-[#64748d]">
-              แก้ไขข้อมูลสาขา
-              {editTarget ? ` "${editTarget.name}"` : ""}
+              ปรับปรุงรายละเอียดของสาขา
             </DialogDescription>
           </DialogHeader>
 
@@ -424,12 +500,10 @@ export function BranchView({ branches }: BranchViewProps) {
                 รหัสสาขา (Branch Code) <span className="text-[#ea2261]">*</span>
               </label>
               <Input
-                placeholder="เช่น HQ, BKK01, CNX02"
                 value={code}
-                onChange={(e) => setCode(e.target.value.toUpperCase())}
+                onChange={(e) => setCode(e.target.value)}
+                className="text-xs h-9 rounded-xl uppercase"
                 required
-                disabled={isEditLoading}
-                className="h-9 rounded-xl text-xs font-mono font-bold"
               />
             </div>
 
@@ -438,12 +512,21 @@ export function BranchView({ branches }: BranchViewProps) {
                 ชื่อสาขา <span className="text-[#ea2261]">*</span>
               </label>
               <Input
-                placeholder="เช่น สำนักงานใหญ่, สาขาเชียงใหม่"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                className="text-xs h-9 rounded-xl"
                 required
-                disabled={isEditLoading}
-                className="h-9 rounded-xl text-xs"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-xs font-semibold text-[#0d253d]">
+                ที่อยู่สาขา
+              </label>
+              <Input
+                value={address}
+                onChange={(e) => setAddress(e.target.value)}
+                className="text-xs h-9 rounded-xl"
               />
             </div>
 
@@ -452,25 +535,9 @@ export function BranchView({ branches }: BranchViewProps) {
                 เบอร์โทรศัพท์สาขา
               </label>
               <Input
-                placeholder="เช่น 02-123-4567"
                 value={phone}
                 onChange={(e) => setPhone(e.target.value)}
-                disabled={isEditLoading}
-                className="h-9 rounded-xl text-xs"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-[#0d253d]">
-                ที่อยู่สาขา
-              </label>
-              <textarea
-                rows={2}
-                placeholder="ที่อยู่ ถนน แขวง/ตำบล จังหวัด"
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                disabled={isEditLoading}
-                className="w-full rounded-xl border border-[#a8c3de]/60 p-2.5 text-xs focus:border-[#533afd] focus:outline-none"
+                className="text-xs h-9 rounded-xl"
               />
             </div>
 
@@ -480,76 +547,71 @@ export function BranchView({ branches }: BranchViewProps) {
                 id="isMainEdit"
                 checked={isMain}
                 onChange={(e) => setIsMain(e.target.checked)}
-                className="rounded border-[#e3e8ee] text-[#533afd] focus:ring-[#533afd]"
+                className="rounded border-[#a8c3de] text-[#533afd] focus:ring-[#533afd]"
               />
               <label
                 htmlFor="isMainEdit"
                 className="text-xs font-medium text-[#0d253d] cursor-pointer"
               >
-                ตั้งเป็นสำนักงานใหญ่ (Main Branch)
+                กำหนดเป็นสำนักงานใหญ่ (Main Branch)
               </label>
             </div>
 
-            <DialogFooter className="mt-6 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
+            <DialogFooter className="mt-5">
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => {
-                  setIsEditOpen(false);
-                  setEditTarget(null);
-                }}
-                disabled={isEditLoading}
-                className="rounded-full text-xs h-9 px-4"
+                onClick={() => setIsEditOpen(false)}
+                className="rounded-full text-xs h-9"
               >
                 ยกเลิก
               </Button>
               <Button
                 type="submit"
                 disabled={isEditLoading}
-                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] text-xs h-9 px-5 font-semibold"
+                className="rounded-full bg-[#533afd] hover:bg-[#4434d4] text-white text-xs h-9 px-4"
               >
                 {isEditLoading ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    กำลังบันทึก...
-                  </>
-                ) : (
-                  "บันทึกการแก้ไข"
-                )}
+                  <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+                ) : null}
+                บันทึกการแก้ไข
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Alert */}
+      {/* Delete Branch Dialog */}
       <AlertDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
       >
-        <AlertDialogContent className="max-w-md rounded-2xl p-6">
+        <AlertDialogContent className="rounded-2xl p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base font-bold text-[#0d253d]">
               ยืนยันการลบสาขา?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-[#64748d]">
-              คุณต้องการลบสาขา &ldquo;{deleteTarget?.name}&rdquo; (
-              {deleteTarget?.code}) ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้
+              คุณกำลังจะลบสาขา &ldquo;{deleteTarget?.name}&rdquo; ({deleteTarget?.code})
+              ออกจากระบบ หากมีแผนกหรือพนักงานผูกอยู่จะไม่สามารถลบได้
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-4">
             <AlertDialogCancel
               disabled={isLoading}
-              className="rounded-full text-xs h-9 px-4"
+              className="rounded-full text-xs h-9"
             >
               ยกเลิก
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
               disabled={isLoading}
-              className="rounded-full bg-[#ea2261] text-white hover:bg-[#d91452] text-xs h-9 px-5 font-semibold"
+              className="rounded-full bg-[#ea2261] hover:bg-[#d91452] text-white text-xs h-9 px-4"
             >
-              {isLoading ? "กำลังลบ..." : "ลบสาขา"}
+              {isLoading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              ) : null}
+              ยืนยันการลบ
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

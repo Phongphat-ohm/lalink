@@ -47,6 +47,8 @@ import {
   Upload,
 } from "lucide-react";
 
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+
 export interface SerializedEmployee {
   id: string;
   employeeCode: string;
@@ -80,6 +82,11 @@ export function EmployeeTable({
   const router = useRouter();
   const [employees, setEmployees] = React.useState(initialEmployees);
   const [searchTerm, setSearchTerm] = React.useState("");
+  const [departmentFilter, setDepartmentFilter] = React.useState<string>("ALL");
+  const [statusFilter, setStatusFilter] = React.useState<string>("ALL");
+  const [lineFilter, setLineFilter] = React.useState<string>("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
 
   // Add Employee Modal State
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
@@ -118,14 +125,33 @@ export function EmployeeTable({
 
   const filteredEmployees = employees.filter((emp) => {
     const term = searchTerm.toLowerCase();
-    return (
+    const matchesSearch =
       emp.employeeCode.toLowerCase().includes(term) ||
       emp.firstName.toLowerCase().includes(term) ||
       emp.lastName.toLowerCase().includes(term) ||
       (emp.email && emp.email.toLowerCase().includes(term)) ||
-      (emp.department && emp.department.name.toLowerCase().includes(term))
-    );
+      (emp.department && emp.department.name.toLowerCase().includes(term));
+
+    const matchesDept =
+      departmentFilter === "ALL" ||
+      (emp.department && emp.department.id === departmentFilter);
+
+    const matchesStatus =
+      statusFilter === "ALL" || emp.status === statusFilter;
+
+    const matchesLine =
+      lineFilter === "ALL" ||
+      (lineFilter === "LINKED" && !!emp.lineUserId) ||
+      (lineFilter === "UNLINKED" && !emp.lineUserId);
+
+    return matchesSearch && matchesDept && matchesStatus && matchesLine;
   });
+
+  const totalPages = Math.ceil(filteredEmployees.length / pageSize) || 1;
+  const paginatedEmployees = filteredEmployees.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   async function handleCreateEmployee(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -243,33 +269,90 @@ export function EmployeeTable({
   return (
     <div className="space-y-6">
       {/* Top Action Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#64748d]" />
-          <Input
-            placeholder="ค้นหาชื่อ, รหัสพนักงาน, แผนก หรืออีเมล..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 h-10 rounded-full border-[#a8c3de]/60 focus-visible:border-[#533afd]"
-          />
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 flex-1">
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#64748d]" />
+            <Input
+              placeholder="ค้นหาชื่อ, รหัส, อีเมล..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-10 h-10 rounded-full border-[#a8c3de]/60 focus-visible:border-[#533afd] text-xs"
+            />
+          </div>
+
+          <div className="flex items-center space-x-1.5">
+            <span className="text-xs font-semibold text-[#64748d]">แผนก:</span>
+            <Select
+              value={departmentFilter}
+              onChange={(e) => {
+                setDepartmentFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="h-9 rounded-xl text-xs w-36"
+            >
+              <option value="ALL">ทุกแผนก</option>
+              {departments.map((d) => (
+                <option key={d.id} value={d.id}>
+                  {d.name}
+                </option>
+              ))}
+            </Select>
+          </div>
+
+          <div className="flex items-center space-x-1.5">
+            <span className="text-xs font-semibold text-[#64748d]">LINE:</span>
+            <Select
+              value={lineFilter}
+              onChange={(e) => {
+                setLineFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="h-9 rounded-xl text-xs w-32"
+            >
+              <option value="ALL">ทุกสถานะ</option>
+              <option value="LINKED">เชื่อมต่อแล้ว</option>
+              <option value="UNLINKED">ยังไม่เชื่อม</option>
+            </Select>
+          </div>
+
+          <div className="flex items-center space-x-1.5">
+            <span className="text-xs font-semibold text-[#64748d]">สถานะ:</span>
+            <Select
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="h-9 rounded-xl text-xs w-32"
+            >
+              <option value="ALL">ทั้งหมด</option>
+              <option value="ACTIVE">ปกติ</option>
+              <option value="PROBATION">ทดลองงาน</option>
+              <option value="RESIGNED">พ้นสภาพ</option>
+            </Select>
+          </div>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-2">
+        <div className="flex flex-wrap gap-2 self-start lg:self-auto">
           {canImport && (
             <Button
               onClick={() => setIsImportOpen(true)}
               variant="outline"
-              className="rounded-full border-[#a8c3de]/60 text-[#0d253d] hover:border-[#533afd] hover:text-[#533afd] px-5 font-semibold text-xs sm:text-sm h-10"
+              className="rounded-full border-[#a8c3de]/60 text-[#0d253d] hover:border-[#533afd] hover:text-[#533afd] px-4 font-semibold text-xs h-10"
             >
-              <Upload className="h-4 w-4 mr-2" />
+              <Upload className="h-4 w-4 mr-1.5" />
               นำเข้า CSV
             </Button>
           )}
           <Button
             onClick={() => setIsAddModalOpen(true)}
-            className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] shadow-xs px-5 font-semibold text-xs sm:text-sm h-10"
+            className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] shadow-xs px-4 font-semibold text-xs h-10"
           >
-            <UserPlus className="h-4 w-4 mr-2" />
+            <UserPlus className="h-4 w-4 mr-1.5" />
             เพิ่มพนักงานใหม่
           </Button>
         </div>
@@ -280,7 +363,7 @@ export function EmployeeTable({
         <CardHeader className="p-5 border-b border-[#e3e8ee] bg-[#f6f9fc]/50 flex flex-row items-center justify-between">
           <div>
             <CardTitle className="text-sm font-semibold text-[#0d253d]">
-              รายชื่อพนักงานทั้งหมด ({filteredEmployees.length} คน)
+              รายชื่อพนักงาน ({filteredEmployees.length} คน)
             </CardTitle>
             <p className="text-xs text-[#64748d] mt-0.5">
               จัดการข้อมูลส่วนบุคคล การผูกบัญชี LINE และโควตาวันลา
@@ -303,19 +386,19 @@ export function EmployeeTable({
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e3e8ee]/70">
-                {filteredEmployees.length === 0 ? (
+                {paginatedEmployees.length === 0 ? (
                   <tr>
                     <td
                       colSpan={7}
                       className="p-10 text-center text-[#64748d] bg-white"
                     >
-                      {searchTerm
-                        ? "ไม่พบข้อมูลพนักงานที่ตรงกับคำค้นหา"
+                      {searchTerm || departmentFilter !== "ALL" || statusFilter !== "ALL"
+                        ? "ไม่พบข้อมูลพนักงานที่ตรงกับเงื่อนไขการค้นหา"
                         : "ยังไม่มีข้อมูลพนักงานในระบบ กรุณากดปุ่มเพิ่มพนักงานใหม่"}
                     </td>
                   </tr>
                 ) : (
-                  filteredEmployees.map((emp) => {
+                  paginatedEmployees.map((emp) => {
                     const isLinked = !!emp.lineUserId;
 
                     return (
@@ -429,6 +512,15 @@ export function EmployeeTable({
               </tbody>
             </table>
           </div>
+
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredEmployees.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
 

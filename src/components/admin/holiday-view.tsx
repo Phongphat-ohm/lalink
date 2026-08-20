@@ -20,6 +20,7 @@ import {
   Pencil,
   Trash2,
   AlertCircle,
+  Search,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -31,6 +32,8 @@ import {
   AlertDialogCancel,
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { toast } from "@/components/ui/toast";
 
 interface SerializedHoliday {
   id: string;
@@ -62,6 +65,10 @@ export function HolidayView({
   onDeleteHoliday,
 }: HolidayViewProps) {
   const router = useRouter();
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
+
   const [isAddModalOpen, setIsAddModalOpen] = React.useState(false);
   const [isSaving, setIsSaving] = React.useState(false);
 
@@ -115,11 +122,27 @@ export function HolidayView({
 
     if (res.success) {
       setDeleteTarget(null);
+      toast.success(res.message || "ลบวันหยุดเรียบร้อยแล้ว");
       router.refresh();
     } else {
-      alert(res.message || "ไม่สามารถลบวันหยุดได้");
+      toast.error(res.message || "ไม่สามารถลบวันหยุดได้");
     }
   }
+
+  const filteredHolidays = holidays.filter((h) => {
+    const term = searchTerm.toLowerCase();
+    return (
+      h.name.toLowerCase().includes(term) ||
+      h.date.toLowerCase().includes(term) ||
+      h.weekday.toLowerCase().includes(term)
+    );
+  });
+
+  const totalPages = Math.ceil(filteredHolidays.length / pageSize) || 1;
+  const paginatedHolidays = filteredHolidays.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   return (
     <div className="space-y-6">
@@ -138,36 +161,53 @@ export function HolidayView({
           <Button
             type="button"
             variant="outline"
-            onClick={async () => {
-              const { importOfficialHolidaysAction } = await import("@/features/leave");
-              const res = await importOfficialHolidaysAction(year);
-              if (res.success) {
-                alert(res.message);
-                router.refresh();
-              } else {
-                alert(res.message || "เกิดข้อผิดพลาด");
-              }
-            }}
-            className="rounded-full border-[#e3e8ee] hover:bg-[#533afd]/10 text-[#533afd] h-9 text-xs font-semibold px-4"
+            onClick={() => router.push(`/admin/holidays?year=${year - 1}`)}
+            className="h-9 px-3 text-xs rounded-full border-[#e3e8ee] hover:bg-[#f6f9fc]"
           >
-            <CalendarDays className="h-4 w-4 mr-1.5" /> โหลดวันหยุดนักขัตฤกษ์ไทย
+            ปีก่อนหน้า ({year - 1})
           </Button>
-
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => router.push(`/admin/holidays?year=${year + 1}`)}
+            className="h-9 px-3 text-xs rounded-full border-[#e3e8ee] hover:bg-[#f6f9fc]"
+          >
+            ปีถัดไป ({year + 1})
+          </Button>
           <Button
             onClick={() => setIsAddModalOpen(true)}
-            className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] h-9 text-xs font-semibold px-4"
+            className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] h-9 text-xs font-semibold px-4 shadow-sm"
           >
             <Plus className="h-4 w-4 mr-1.5" /> เพิ่มวันหยุด
           </Button>
         </div>
       </div>
 
+      {/* Search Bar */}
+      <Card className="border-[#e3e8ee] bg-white shadow-xs rounded-2xl">
+        <CardContent className="p-4">
+          <div className="relative w-full sm:w-80">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
+            <Input
+              type="text"
+              placeholder="ค้นหาชื่อวันหยุด, วันที่..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-9 h-9 rounded-xl text-xs w-full"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Holidays List Card */}
       <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden">
         <CardHeader className="p-4 border-b border-[#e3e8ee] bg-[#f6f9fc]/50 flex flex-row items-center justify-between">
           <CardTitle className="text-sm font-semibold text-[#0d253d] flex items-center">
             <CalendarDays className="h-4 w-4 text-[#533afd] mr-2" />
-            รายการวันหยุด ({holidays.length} วัน)
+            รายการวันหยุด ({filteredHolidays.length} วัน)
           </CardTitle>
           <Button
             variant="ghost"
@@ -179,247 +219,252 @@ export function HolidayView({
           </Button>
         </CardHeader>
         <CardContent className="p-0">
-          {holidays.length === 0 ? (
+          {paginatedHolidays.length === 0 ? (
             <div className="py-10 text-center text-[#64748d] text-xs">
-              ยังไม่มีการกำหนดวันหยุดบริษัทสำหรับปี {year}
+              {searchTerm
+                ? "ไม่พบวันหยุดที่ตรงกับคำค้นหา"
+                : `ยังไม่มีการกำหนดวันหยุดบริษัทสำหรับปี ${year}`}
             </div>
           ) : (
-            <table className="w-full text-xs text-left">
-              <thead className="border-b border-[#e3e8ee] text-[#64748d] uppercase bg-[#f6f9fc]">
-                <tr>
-                  <th className="py-3.5 px-4 pl-5 font-semibold">วันที่</th>
-                  <th className="py-3.5 px-4 font-semibold">วันในสัปดาห์</th>
-                  <th className="py-3.5 px-4 font-semibold">ชื่อวันหยุด</th>
-                  <th className="py-3.5 px-4 pr-5 font-semibold text-right">
-                    การจัดการ
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#e3e8ee]/70">
-                {holidays.map((h) => (
-                  <tr
-                    key={h.id}
-                    className="hover:bg-[#f6f9fc]/70 transition-colors"
-                  >
-                    <td className="py-3.5 px-4 pl-5 font-mono font-semibold text-[#533afd] tabular-nums">
-                      {h.date}
-                    </td>
-                    <td className="py-3.5 px-4 text-[#64748d]">{h.weekday}</td>
-                    <td className="py-3.5 px-4 font-semibold text-[#0d253d]">
-                      {h.name}
-                    </td>
-                    <td className="py-3.5 px-4 pr-5">
-                      <div className="flex items-center justify-end space-x-1.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditTarget(h)}
-                          className="h-7 px-2 text-xs text-[#533afd] hover:bg-[#533afd]/10 rounded-full"
-                          title="แก้ไขวันหยุด"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setDeleteTarget(h)}
-                          className="h-7 px-2 text-xs text-[#ea2261] hover:bg-[#ffe4e6] rounded-full"
-                          title="ลบวันหยุด"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </div>
-                    </td>
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead className="border-b border-[#e3e8ee] text-[#64748d] uppercase bg-[#f6f9fc]">
+                  <tr>
+                    <th className="py-3.5 px-4 pl-5 font-semibold">วันที่</th>
+                    <th className="py-3.5 px-4 font-semibold">วันในสัปดาห์</th>
+                    <th className="py-3.5 px-4 font-semibold">ชื่อวันหยุด</th>
+                    <th className="py-3.5 px-4 pr-5 font-semibold text-right">
+                      การจัดการ
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody className="divide-y divide-[#e3e8ee]/70">
+                  {paginatedHolidays.map((h) => (
+                    <tr
+                      key={h.id}
+                      className="hover:bg-[#f6f9fc]/70 transition-colors"
+                    >
+                      <td className="py-3.5 px-4 pl-5 font-mono font-semibold text-[#533afd] tabular-nums">
+                        {h.date}
+                      </td>
+                      <td className="py-3.5 px-4 text-[#64748d]">{h.weekday}</td>
+                      <td className="py-3.5 px-4 font-semibold text-[#0d253d]">
+                        {h.name}
+                      </td>
+                      <td className="py-3.5 px-4 pr-5">
+                        <div className="flex items-center justify-end space-x-1.5">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditTarget(h)}
+                            className="h-7 px-2 text-xs text-[#533afd] hover:bg-[#533afd]/10 rounded-full"
+                            title="แก้ไขวันหยุด"
+                          >
+                            <Pencil className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeleteTarget(h)}
+                            className="h-7 px-2 text-xs text-[#ea2261] hover:bg-[#ffe4e6] rounded-full"
+                            title="ลบวันหยุด"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
+
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredHolidays.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
 
-      {/* Modal: Add Holiday Dialog */}
+      {/* Add Holiday Modal */}
       <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
         <DialogContent
           onClose={() => setIsAddModalOpen(false)}
-          className="max-w-md rounded-2xl p-6"
+          className="max-w-md p-6 rounded-2xl"
         >
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
-              <CalendarDays className="h-5 w-5 text-[#533afd] mr-2" />
-              เพิ่มวันหยุดบริษัท
+            <DialogTitle className="text-base font-bold text-[#0d253d]">
+              เพิ่มวันหยุดประจำปี {year}
             </DialogTitle>
             <DialogDescription className="text-xs text-[#64748d]">
-              ระบุวันที่และชื่อวันหยุดพิเศษเพื่อยกเว้นการหักโควตาวันลา
+              กำหนดวันที่และชื่อวันหยุดพิเศษหรือวันหยุดตามประเพณี
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleSubmit} className="space-y-4 mt-3">
+          <form onSubmit={handleSubmit} className="space-y-3 mt-3">
             <div className="space-y-1">
               <label className="text-xs font-semibold text-[#0d253d]">
-                วันที่หยุด <span className="text-[#ea2261]">*</span>
+                วันที่ <span className="text-[#ea2261]">*</span>
               </label>
-              <div className="relative w-full min-w-0">
-                <input
-                  type="date"
-                  name="date"
-                  required
-                  className="date-input-fixed block w-full rounded-xl border border-[#a8c3de]/60 bg-white px-3.5 py-2 text-xs text-[#0d253d] focus:border-[#533afd] focus:outline-none focus:ring-2 focus:ring-[#533afd]/20"
-                />
-              </div>
+              <Input
+                required
+                type="date"
+                name="date"
+                min={`${year}-01-01`}
+                max={`${year}-12-31`}
+                className="h-9 rounded-xl text-xs"
+              />
             </div>
-
             <div className="space-y-1">
               <label className="text-xs font-semibold text-[#0d253d]">
                 ชื่อวันหยุด <span className="text-[#ea2261]">*</span>
               </label>
               <Input
-                name="name"
-                placeholder="เช่น วันสงกรานต์, วันแรงงานแห่งชาติ"
                 required
-                className="h-10 rounded-xl"
+                name="name"
+                placeholder="เช่น วันขึ้นปีใหม่, วันสงกรานต์"
+                className="h-9 rounded-xl text-xs"
               />
             </div>
-
-            <DialogFooter className="mt-6 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
+            <DialogFooter className="mt-5">
               <Button
                 type="button"
                 variant="outline"
                 onClick={() => setIsAddModalOpen(false)}
-                className="rounded-full h-9 px-4 text-xs"
+                className="h-9 rounded-full text-xs"
               >
                 ยกเลิก
               </Button>
               <Button
                 type="submit"
                 disabled={isSaving}
-                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] h-9 px-5 text-xs font-semibold"
+                className="h-9 rounded-full bg-[#533afd] text-white text-xs font-semibold px-4"
               >
-                {isSaving ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    กำลังบันทึก...
-                  </>
-                ) : (
-                  "บันทึกวันหยุด"
+                {isSaving && (
+                  <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
                 )}
+                บันทึกวันหยุด
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
-    {/* Modal: Edit Holiday Dialog */}
+
+      {/* Edit Holiday Modal */}
       <Dialog
         open={!!editTarget}
         onOpenChange={(open) => !open && setEditTarget(null)}
       >
         <DialogContent
           onClose={() => setEditTarget(null)}
-          className="max-w-md rounded-2xl p-6"
+          className="max-w-md p-6 rounded-2xl"
         >
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-[#0d253d] flex items-center">
-              <Pencil className="h-5 w-5 text-[#533afd] mr-2" />
-              แก้ไขวันหยุดบริษัท
+            <DialogTitle className="text-base font-bold text-[#0d253d]">
+              แก้ไขวันหยุด
             </DialogTitle>
             <DialogDescription className="text-xs text-[#64748d]">
-              แก้ไขวันที่และชื่อของวันหยุดพิเศษ
+              ปรับปรุงวันที่หรือชื่อวันหยุด
             </DialogDescription>
           </DialogHeader>
 
           {editError && (
-            <div className="p-2.5 rounded-xl bg-[#ffe4e6] text-[#ea2261] text-xs flex items-center">
+            <div className="p-3 rounded-xl bg-[#ffe4e6] text-[#ea2261] text-xs flex items-center">
               <AlertCircle className="h-4 w-4 mr-2 shrink-0" />
-              {editError}
+              <span>{editError}</span>
             </div>
           )}
 
-          <form onSubmit={handleUpdateSubmit} className="space-y-4 mt-3">
-            <input type="hidden" name="id" value={editTarget?.id} />
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-[#0d253d]">
-                วันที่หยุด <span className="text-[#ea2261]">*</span>
-              </label>
-              <div className="relative w-full min-w-0">
-                <input
+          {editTarget && (
+            <form onSubmit={handleUpdateSubmit} className="space-y-3 mt-3">
+              <input type="hidden" name="id" value={editTarget.id} />
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#0d253d]">
+                  วันที่ <span className="text-[#ea2261]">*</span>
+                </label>
+                <Input
+                  required
                   type="date"
                   name="date"
-                  defaultValue={editTarget?.isoDate}
-                  required
-                  className="date-input-fixed block w-full rounded-xl border border-[#a8c3de]/60 bg-white px-3.5 py-2 text-xs text-[#0d253d] focus:border-[#533afd] focus:outline-none focus:ring-2 focus:ring-[#533afd]/20"
+                  defaultValue={editTarget.isoDate}
+                  min={`${year}-01-01`}
+                  max={`${year}-12-31`}
+                  className="h-9 rounded-xl text-xs"
                 />
               </div>
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-[#0d253d]">
-                ชื่อวันหยุด <span className="text-[#ea2261]">*</span>
-              </label>
-              <Input
-                name="name"
-                defaultValue={editTarget?.name}
-                placeholder="เช่น วันสงกรานต์, วันแรงงานแห่งชาติ"
-                required
-                className="h-10 rounded-xl"
-              />
-            </div>
-
-            <DialogFooter className="mt-6 pt-3 border-t border-[#e3e8ee] flex justify-end space-x-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setEditTarget(null)}
-                className="rounded-full h-9 px-4 text-xs"
-              >
-                ยกเลิก
-              </Button>
-              <Button
-                type="submit"
-                disabled={isEditSaving}
-                className="rounded-full bg-[#533afd] text-white hover:bg-[#4434d4] h-9 px-5 text-xs font-semibold"
-              >
-                {isEditSaving ? (
-                  <>
-                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                    กำลังบันทึก...
-                  </>
-                ) : (
-                  "บันทึกการแก้ไข"
-                )}
-              </Button>
-            </DialogFooter>
-          </form>
+              <div className="space-y-1">
+                <label className="text-xs font-semibold text-[#0d253d]">
+                  ชื่อวันหยุด <span className="text-[#ea2261]">*</span>
+                </label>
+                <Input
+                  required
+                  name="name"
+                  defaultValue={editTarget.name}
+                  placeholder="เช่น วันขึ้นปีใหม่, วันสงกรานต์"
+                  className="h-9 rounded-xl text-xs"
+                />
+              </div>
+              <DialogFooter className="mt-5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setEditTarget(null)}
+                  className="h-9 rounded-full text-xs"
+                >
+                  ยกเลิก
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isEditSaving}
+                  className="h-9 rounded-full bg-[#533afd] text-white text-xs font-semibold px-4"
+                >
+                  {isEditSaving && (
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                  )}
+                  บันทึกการแก้ไข
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
         </DialogContent>
       </Dialog>
 
-      {/* Delete Confirmation Alert */}
+      {/* Delete Holiday Dialog */}
       <AlertDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
       >
-        <AlertDialogContent className="max-w-md rounded-2xl p-6">
+        <AlertDialogContent className="rounded-2xl p-6">
           <AlertDialogHeader>
             <AlertDialogTitle className="text-base font-bold text-[#0d253d]">
               ยืนยันการลบวันหยุด?
             </AlertDialogTitle>
             <AlertDialogDescription className="text-xs text-[#64748d]">
-              คุณต้องการลบวันหยุด &ldquo;{deleteTarget?.name}&rdquo; (
-              {deleteTarget?.date}) ใช่หรือไม่? การกระทำนี้ไม่สามารถย้อนกลับได้
+              คุณกำลังจะลบวันหยุด &ldquo;{deleteTarget?.name}&rdquo; (
+              {deleteTarget?.date}) ออกจากปฏิทินบริษัทประจำปี {year}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="mt-4">
             <AlertDialogCancel
               disabled={isDeleting}
-              className="rounded-full text-xs h-9 px-4"
+              className="rounded-full text-xs h-9"
             >
               ยกเลิก
             </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDeleteConfirm}
               disabled={isDeleting}
-              className="rounded-full bg-[#ea2261] text-white hover:bg-[#d91452] text-xs h-9 px-5 font-semibold"
+              className="rounded-full bg-[#ea2261] hover:bg-[#d91452] text-white text-xs h-9 px-4"
             >
-              {isDeleting ? "กำลังลบ..." : "ลบวันหยุด"}
+              {isDeleting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
+              ) : null}
+              ยืนยันการลบ
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

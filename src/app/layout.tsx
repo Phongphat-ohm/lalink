@@ -14,6 +14,8 @@ export const metadata: Metadata = {
   description: "ระบบจัดการการลาออนไลน์สำหรับองค์กร",
 };
 
+import { Toaster } from "@/components/ui/toast";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -23,6 +25,7 @@ export default function RootLayout({
     <html lang="th" className={`${kanit.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col font-[family-name:var(--font-kanit)]">
         {children}
+        <Toaster />
       </body>
     </html>
   );

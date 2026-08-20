@@ -1,5 +1,3 @@
-import { sanitizeFilename } from "./validator";
-
 export interface LeaveAttachmentKeyParams {
   companyId: string;
   employeeId: string;
@@ -8,8 +6,15 @@ export interface LeaveAttachmentKeyParams {
   extension: string;
 }
 
+export interface MessageAttachmentKeyParams {
+  companyId: string;
+  threadId: string;
+  fileId: string;
+  extension: string;
+}
+
 /**
- * Generate Tenant Partitioned S3 Object Key:
+ * Generate Tenant Partitioned S3 Object Key for Leave:
  * companies/{companyId}/employees/{employeeId}/leave/{leaveRequestId}/{fileId}.{ext}
  */
 export function generateLeaveAttachmentKey({
@@ -24,7 +29,21 @@ export function generateLeaveAttachmentKey({
 }
 
 /**
- * Parse an S3 Object Key to extract tenant and ownership information
+ * Generate Tenant Partitioned S3 Object Key for Messages:
+ * companies/{companyId}/messages/{threadId}/{fileId}.{ext}
+ */
+export function generateMessageAttachmentKey({
+  companyId,
+  threadId,
+  fileId,
+  extension,
+}: MessageAttachmentKeyParams): string {
+  const safeExt = extension.replace(/^\./, "").toLowerCase();
+  return `companies/${companyId || "global"}/messages/${threadId}/${fileId}.${safeExt}`;
+}
+
+/**
+ * Parse an S3 Object Key to extract tenant and ownership information for leave
  */
 export function parseLeaveAttachmentKey(key: string): {
   companyId: string | null;
@@ -34,7 +53,6 @@ export function parseLeaveAttachmentKey(key: string): {
   isValid: boolean;
 } {
   const parts = key.split("/");
-  // Expected structure: companies / {companyId} / employees / {employeeId} / leave / {leaveRequestId} / {fileId}.{ext}
   if (
     parts.length === 7 &&
     parts[0] === "companies" &&

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import {
   Database,
   Download,
@@ -15,8 +16,11 @@ import {
   HardDrive,
   Calendar,
   ShieldCheck,
+  Search,
 } from "lucide-react";
 import { triggerDatabaseBackupAction } from "@/features/company/super-admin-ops-actions";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { toast } from "@/components/ui/toast";
 
 export interface SerializedBackupLog {
   id: string;
@@ -35,10 +39,12 @@ interface BackupViewProps {
 
 export function BackupView({ backups }: BackupViewProps) {
   const router = useRouter();
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [typeFilter, setTypeFilter] = React.useState<"ALL" | "MANUAL" | "SCHEDULED">("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
   const [isLoading, setIsLoading] = React.useState(false);
-  const [successMessage, setSuccessMessage] = React.useState<string | null>(
-    null,
-  );
+  const [successMessage, setSuccessMessage] = React.useState<string | null>(null);
 
   async function handleTriggerBackup() {
     setIsLoading(true);
@@ -48,11 +54,10 @@ export function BackupView({ backups }: BackupViewProps) {
     setIsLoading(false);
 
     if (result.success) {
-      setSuccessMessage(result.message || "สร้างสำรองฐานข้อมูลสำเร็จ!");
+      toast.success(result.message || "สร้างสำรองฐานข้อมูลสำเร็จ!");
       router.refresh();
-      setTimeout(() => setSuccessMessage(null), 4000);
     } else {
-      alert(result.message || "เกิดข้อผิดพลาดในการสำรองข้อมูล");
+      toast.error(result.message || "เกิดข้อผิดพลาดในการสำรองข้อมูล");
     }
   }
 
@@ -64,6 +69,22 @@ export function BackupView({ backups }: BackupViewProps) {
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i];
   }
+
+  const filteredBackups = backups.filter((b) => {
+    const matchesSearch =
+      b.filename.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (b.checksum && b.checksum.toLowerCase().includes(searchTerm.toLowerCase()));
+
+    const matchesType = typeFilter === "ALL" || b.triggerType === typeFilter;
+
+    return matchesSearch && matchesType;
+  });
+
+  const totalPages = Math.ceil(filteredBackups.length / pageSize) || 1;
+  const paginatedBackups = filteredBackups.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   return (
     <div className="space-y-6">
@@ -91,8 +112,7 @@ export function BackupView({ backups }: BackupViewProps) {
             </>
           ) : (
             <>
-              <Database className="h-4 w-4 mr-1.5" /> สำรองข้อมูลทันที (Backup
-              Now)
+              <Database className="h-4 w-4 mr-1.5" /> สำรองข้อมูลทันที (Backup Now)
             </>
           )}
         </Button>
@@ -105,8 +125,51 @@ export function BackupView({ backups }: BackupViewProps) {
         </div>
       )}
 
+      {/* Search & Filter Bar */}
+      <Card className="border-[#e3e8ee] bg-white shadow-xs rounded-2xl">
+        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="relative w-full sm:w-80">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
+            <Input
+              type="text"
+              placeholder="ค้นหาชื่อไฟล์สำรอง, Checksum..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-9 h-9 rounded-xl text-xs w-full"
+            />
+          </div>
+
+          <div className="flex items-center space-x-1.5 self-start sm:self-auto">
+            {(["ALL", "MANUAL", "SCHEDULED"] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => {
+                  setTypeFilter(st);
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                  typeFilter === st
+                    ? "bg-[#533afd] text-white font-semibold"
+                    : "bg-[#f6f9fc] text-[#64748d] hover:bg-[#e3e8ee]/80"
+                }`}
+              >
+                {st === "ALL"
+                  ? "ทั้งหมด"
+                  : st === "MANUAL"
+                    ? "สร้างด้วยตนเอง (Manual)"
+                    : "ระบบอัตโนมัติ (Auto)"}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Backups Table */}
-      <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl overflow-hidden">
+      <Card className="border-[#e3e8ee] bg-white shadow-xs rounded-2xl overflow-hidden">
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-left">
@@ -126,18 +189,17 @@ export function BackupView({ backups }: BackupViewProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#e3e8ee]/70 font-mono">
-                {backups.length === 0 ? (
+                {paginatedBackups.length === 0 ? (
                   <tr>
                     <td
                       colSpan={7}
                       className="py-12 text-center text-[#64748d] font-sans"
                     >
-                      ยังไม่มีประวัติการสำรองฐานข้อมูล กดปุ่ม
-                      &ldquo;สำรองข้อมูลทันที&rdquo; เพื่อสร้าง Snapshot แรก
+                      ไม่พบประวัติการสำรองฐานข้อมูลตามเงื่อนไขที่ระบุ
                     </td>
                   </tr>
                 ) : (
-                  backups.map((b) => (
+                  paginatedBackups.map((b) => (
                     <tr
                       key={b.id}
                       className="hover:bg-[#f6f9fc]/70 transition-colors"
@@ -192,6 +254,15 @@ export function BackupView({ backups }: BackupViewProps) {
               </tbody>
             </table>
           </div>
+
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredBackups.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
     </div>

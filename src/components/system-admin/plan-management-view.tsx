@@ -36,7 +36,10 @@ import {
   Pencil,
   Trash2,
   Sparkles,
+  Search,
 } from "lucide-react";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
+import { toast } from "@/components/ui/toast";
 import {
   createPlanAction,
   updatePlanAction,
@@ -64,6 +67,12 @@ interface PlanManagementViewProps {
 
 export function PlanManagementView({ plans }: PlanManagementViewProps) {
   const router = useRouter();
+
+  // Search & Filter State
+  const [searchTerm, setSearchTerm] = React.useState("");
+  const [statusFilter, setStatusFilter] = React.useState<"ALL" | "ACTIVE" | "INACTIVE">("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(6);
 
   // Create/Edit Modal State
   const [isModalOpen, setIsModalOpen] = React.useState(false);
@@ -148,9 +157,10 @@ export function PlanManagementView({ plans }: PlanManagementViewProps) {
   async function handleToggleStatus(p: SerializedPlan) {
     const result = await togglePlanStatusAction(p.id, !p.isActive);
     if (result.success) {
+      toast.success(result.message || "เปลี่ยนสถานะแพ็กเกจสำเร็จ");
       router.refresh();
     } else {
-      alert(result.message || "ไม่สามารถเปลี่ยนสถานะได้");
+      toast.error(result.message || "ไม่สามารถเปลี่ยนสถานะได้");
     }
   }
 
@@ -162,11 +172,30 @@ export function PlanManagementView({ plans }: PlanManagementViewProps) {
 
     if (result.success) {
       setDeleteTarget(null);
+      toast.success(result.message || "ลบแพ็กเกจเรียบร้อยแล้ว");
       router.refresh();
     } else {
-      alert(result.message || "ไม่สามารถลบแพ็กเกจได้");
+      toast.error(result.message || "ไม่สามารถลบแพ็กเกจได้");
     }
   }
+
+  const filteredPlans = plans.filter((p) => {
+    const matchesSearch =
+      p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      p.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.description && p.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesStatus =
+      statusFilter === "ALL" ||
+      (statusFilter === "ACTIVE" && p.isActive) ||
+      (statusFilter === "INACTIVE" && !p.isActive);
+    return matchesSearch && matchesStatus;
+  });
+
+  const totalPages = Math.ceil(filteredPlans.length / pageSize) || 1;
+  const paginatedPlans = filteredPlans.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   return (
     <div className="space-y-6">
@@ -189,109 +218,171 @@ export function PlanManagementView({ plans }: PlanManagementViewProps) {
         </Button>
       </div>
 
-      {/* Plans Grid */}
-      <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {plans.map((p) => (
-          <Card
-            key={p.id}
-            className={`border bg-white shadow-xs rounded-2xl p-5 relative overflow-hidden transition-all flex flex-col justify-between ${
-              p.isActive ? "border-[#e3e8ee]" : "border-[#ea2261]/20 bg-[#fff5f5]/30 opacity-80"
-            }`}
-          >
-            <div>
-              <div className="flex items-start justify-between">
-                <div>
-                  <div className="flex items-center space-x-2">
-                    <span className="font-mono text-xs font-bold text-[#533afd] bg-[#533afd]/10 px-2 py-0.5 rounded-full">
-                      {p.code}
-                    </span>
-                    <Badge variant={p.isActive ? "success" : "destructive"} className="text-[10px] rounded-full">
-                      {p.isActive ? "เปิดใช้งาน" : "ปิดใช้งาน"}
-                    </Badge>
-                  </div>
-                  <h2 className="text-lg font-bold text-[#0d253d] mt-2">{p.name}</h2>
-                  <p className="text-xs text-[#64748d] mt-1 line-clamp-2">
-                    {p.description || "ไม่มีรายละเอียดเพิ่มเติม"}
-                  </p>
-                </div>
-              </div>
+      {/* Filter and Search Bar */}
+      <Card className="border-[#e3e8ee] bg-white shadow-[0_1px_3px_rgba(0,55,112,0.06)] rounded-2xl">
+        <CardContent className="p-4 flex flex-col sm:flex-row items-center justify-between gap-3">
+          <div className="relative w-full sm:w-80">
+            <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#64748d]" />
+            <Input
+              type="text"
+              placeholder="ค้นหาชื่อแพ็กเกจ, รหัส Code, รายละเอียด..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-9 h-9 rounded-xl text-xs w-full"
+            />
+          </div>
 
-              {/* Pricing */}
-              <div className="mt-4 pt-3 border-t border-[#e3e8ee]/70">
-                <div className="flex items-baseline space-x-1">
-                  <span className="text-2xl font-bold font-mono text-[#0d253d]">
-                    ฿{Number(p.priceMonthly).toLocaleString()}
-                  </span>
-                  <span className="text-xs text-[#64748d]">/ เดือน</span>
-                  {Number(p.priceYearly) > 0 && (
-                    <span className="text-[11px] text-[#059669] font-semibold ml-2">
-                      (฿{Number(p.priceYearly).toLocaleString()} / ปี)
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Limits */}
-              <div className="mt-4 space-y-2 text-xs">
-                <div className="flex items-center justify-between p-2 rounded-xl bg-[#f6f9fc]">
-                  <span className="text-[#64748d] flex items-center">
-                    <Users className="h-3.5 w-3.5 mr-1.5 text-[#533afd]" /> โควตาพนักงานสูงสุด:
-                  </span>
-                  <span className="font-bold text-[#0d253d] font-mono">{p.maxEmployees} คน</span>
-                </div>
-
-                <div className="flex items-center justify-between p-2 rounded-xl bg-[#f6f9fc]">
-                  <span className="text-[#64748d] flex items-center">
-                    <ShieldCheck className="h-3.5 w-3.5 mr-1.5 text-[#059669]" /> โควตาผู้ดูแลระบบ:
-                  </span>
-                  <span className="font-bold text-[#0d253d] font-mono">{p.maxAdmins} บัญชี</span>
-                </div>
-
-                <div className="flex items-center justify-between p-2 rounded-xl bg-[#f6f9fc]">
-                  <span className="text-[#64748d]">องค์กรที่ใช้งานอยู่:</span>
-                  <span className="font-bold text-[#533afd] font-mono">{p.activeSubscriptionsCount} บริษัท</span>
-                </div>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="mt-5 pt-3 border-t border-[#e3e8ee] flex items-center justify-between gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => openEditModal(p)}
-                className="h-8 text-xs rounded-full px-3 text-[#533afd] border-[#e3e8ee] hover:bg-[#533afd]/10 font-semibold"
+          <div className="flex items-center space-x-1.5 self-start sm:self-auto">
+            {(["ALL", "ACTIVE", "INACTIVE"] as const).map((st) => (
+              <button
+                key={st}
+                type="button"
+                onClick={() => {
+                  setStatusFilter(st);
+                  setCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors cursor-pointer ${
+                  statusFilter === st
+                    ? "bg-[#533afd] text-white font-semibold"
+                    : "bg-[#f6f9fc] text-[#64748d] hover:bg-[#e3e8ee]/80"
+                }`}
               >
-                <Pencil className="h-3 w-3 mr-1" /> แก้ไข
-              </Button>
+                {st === "ALL"
+                  ? "ทั้งหมด"
+                  : st === "ACTIVE"
+                    ? "เปิดใช้งาน"
+                    : "ปิดใช้งาน"}
+              </button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
 
-              <div className="flex items-center space-x-1.5">
+      {/* Plans Grid */}
+      {paginatedPlans.length === 0 ? (
+        <Card className="border-[#e3e8ee] bg-white rounded-2xl p-12 text-center text-[#64748d]">
+          <p className="text-xs">ไม่พบแพ็กเกจตามเงื่อนไขที่ระบุ</p>
+        </Card>
+      ) : (
+        <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {paginatedPlans.map((p) => (
+            <Card
+              key={p.id}
+              className={`border bg-white shadow-xs rounded-2xl p-5 relative overflow-hidden transition-all flex flex-col justify-between ${
+                p.isActive ? "border-[#e3e8ee]" : "border-[#ea2261]/20 bg-[#fff5f5]/30 opacity-80"
+              }`}
+            >
+              <div>
+                <div className="flex items-start justify-between">
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <span className="font-mono text-xs font-bold text-[#533afd] bg-[#533afd]/10 px-2 py-0.5 rounded-full">
+                        {p.code}
+                      </span>
+                      <Badge variant={p.isActive ? "success" : "destructive"} className="text-[10px] rounded-full">
+                        {p.isActive ? "เปิดใช้งาน" : "ปิดใช้งาน"}
+                      </Badge>
+                    </div>
+                    <h2 className="text-lg font-bold text-[#0d253d] mt-2">{p.name}</h2>
+                    <p className="text-xs text-[#64748d] mt-1 line-clamp-2">
+                      {p.description || "ไม่มีรายละเอียดเพิ่มเติม"}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Pricing */}
+                <div className="mt-4 pt-3 border-t border-[#e3e8ee]/70">
+                  <div className="flex items-baseline space-x-1">
+                    <span className="text-2xl font-bold font-mono text-[#0d253d]">
+                      ฿{Number(p.priceMonthly).toLocaleString()}
+                    </span>
+                    <span className="text-xs text-[#64748d]">/ เดือน</span>
+                    {Number(p.priceYearly) > 0 && (
+                      <span className="text-[11px] text-[#059669] font-semibold ml-2">
+                        (฿{Number(p.priceYearly).toLocaleString()} / ปี)
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Limits */}
+                <div className="mt-4 space-y-2 text-xs">
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-[#f6f9fc]">
+                    <span className="text-[#64748d] flex items-center">
+                      <Users className="h-3.5 w-3.5 mr-1.5 text-[#533afd]" /> โควตาพนักงานสูงสุด:
+                    </span>
+                    <span className="font-bold text-[#0d253d] font-mono">{p.maxEmployees} คน</span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-[#f6f9fc]">
+                    <span className="text-[#64748d] flex items-center">
+                      <ShieldCheck className="h-3.5 w-3.5 mr-1.5 text-[#059669]" /> โควตาผู้ดูแลระบบ:
+                    </span>
+                    <span className="font-bold text-[#0d253d] font-mono">{p.maxAdmins} บัญชี</span>
+                  </div>
+
+                  <div className="flex items-center justify-between p-2 rounded-xl bg-[#f6f9fc]">
+                    <span className="text-[#64748d]">องค์กรที่ใช้งานอยู่:</span>
+                    <span className="font-bold text-[#533afd] font-mono">{p.activeSubscriptionsCount} บริษัท</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="mt-5 pt-3 border-t border-[#e3e8ee] flex items-center justify-between gap-2">
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => handleToggleStatus(p)}
-                  className={`h-8 text-xs rounded-full px-3 font-semibold ${
-                    p.isActive ? "text-[#ea2261] border-[#fecdd3]" : "text-[#059669] border-[#a7f3d0]"
-                  }`}
+                  onClick={() => openEditModal(p)}
+                  className="h-8 text-xs rounded-full px-3 text-[#533afd] border-[#e3e8ee] hover:bg-[#533afd]/10 font-semibold"
                 >
-                  {p.isActive ? "ปิดใช้" : "เปิดใช้"}
+                  <Pencil className="h-3 w-3 mr-1" /> แก้ไข
                 </Button>
 
-                {p.activeSubscriptionsCount === 0 && (
+                <div className="flex items-center space-x-1.5">
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setDeleteTarget(p)}
-                    className="h-8 w-8 p-0 text-[#ea2261] border-[#fecdd3] hover:bg-[#ffe4e6] rounded-full"
+                    onClick={() => handleToggleStatus(p)}
+                    className={`h-8 text-xs rounded-full px-3 font-semibold ${
+                      p.isActive ? "text-[#ea2261] border-[#fecdd3]" : "text-[#059669] border-[#a7f3d0]"
+                    }`}
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    {p.isActive ? "ปิดใช้" : "เปิดใช้"}
                   </Button>
-                )}
+
+                  {p.activeSubscriptionsCount === 0 && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setDeleteTarget(p)}
+                      className="h-8 w-8 p-0 text-[#ea2261] border-[#fecdd3] hover:bg-[#ffe4e6] rounded-full"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Pagination */}
+      <Card className="border-[#e3e8ee] bg-white shadow-xs rounded-2xl overflow-hidden">
+        <DataTablePagination
+          currentPage={currentPage}
+          totalPages={totalPages}
+          pageSize={pageSize}
+          pageSizeOptions={[3, 6, 12, 24]}
+          totalItems={filteredPlans.length}
+          onPageChange={setCurrentPage}
+          onPageSizeChange={setPageSize}
+        />
+      </Card>
 
       {/* Create / Edit Modal */}
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>

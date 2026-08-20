@@ -40,6 +40,7 @@ import {
   AlertCircle,
   FileCheck,
 } from "lucide-react";
+import { DataTablePagination } from "@/components/ui/data-table-pagination";
 
 export interface SerializedLeaveRequest {
   id: string;
@@ -109,6 +110,9 @@ export function LeaveRequestsTable({
   const [requests, setRequests] = React.useState(initialRequests);
   const [searchTerm, setSearchTerm] = React.useState("");
   const [statusFilter, setStatusFilter] = React.useState<string>("ALL");
+  const [leaveTypeFilter, setLeaveTypeFilter] = React.useState("ALL");
+  const [currentPage, setCurrentPage] = React.useState(1);
+  const [pageSize, setPageSize] = React.useState(10);
 
   // Selected Request for Details Modal
   const [selectedRequest, setSelectedRequest] =
@@ -146,6 +150,7 @@ export function LeaveRequestsTable({
   // Filter requests
   const filteredRequests = requests.filter((req) => {
     const matchesStatus = statusFilter === "ALL" || req.status === statusFilter;
+    const matchesLeaveType = leaveTypeFilter === "ALL" || req.leaveType.id === leaveTypeFilter;
     const matchesSearch =
       req.requestNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
       req.employee.firstName.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -155,8 +160,14 @@ export function LeaveRequestsTable({
         .includes(searchTerm.toLowerCase()) ||
       req.leaveType.name.toLowerCase().includes(searchTerm.toLowerCase());
 
-    return matchesStatus && matchesSearch;
+    return matchesStatus && matchesLeaveType && matchesSearch;
   });
+
+  const totalPages = Math.ceil(filteredRequests.length / pageSize) || 1;
+  const paginatedRequests = filteredRequests.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize,
+  );
 
   // Handle Approve with Loading
   async function handleConfirmApprove() {
@@ -317,15 +328,41 @@ export function LeaveRequestsTable({
   return (
     <div className="space-y-5">
       {/* Search and Filters Bar */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#64748d]" />
-          <Input
-            placeholder="ค้นหาชื่อ, รหัสพนักงาน, เลขที่ใบลา..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10 h-10 rounded-full border-[#a8c3de]/60 focus-visible:border-[#533afd] text-xs sm:text-sm"
-          />
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-2.5 flex-1">
+          <div className="relative w-full sm:w-72">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#64748d]" />
+            <Input
+              placeholder="ค้นหาชื่อ, รหัสพนักงาน, เลขที่ใบลา..."
+              value={searchTerm}
+              onChange={(e) => {
+                setSearchTerm(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="pl-10 h-10 rounded-full border-[#a8c3de]/60 focus-visible:border-[#533afd] text-xs"
+            />
+          </div>
+
+          {availableLeaveTypes.length > 0 && (
+            <div className="flex items-center space-x-1.5">
+              <span className="text-xs font-semibold text-[#64748d]">ประเภทการลา:</span>
+              <select
+                value={leaveTypeFilter}
+                onChange={(e) => {
+                  setLeaveTypeFilter(e.target.value);
+                  setCurrentPage(1);
+                }}
+                className="h-9 rounded-xl border border-[#e3e8ee] bg-white px-2.5 text-xs text-[#0d253d] focus:outline-none focus:ring-1 focus:ring-[#533afd]"
+              >
+                <option value="ALL">ทุกประเภทการลา</option>
+                {availableLeaveTypes.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         {/* Filter Pills */}
@@ -341,7 +378,10 @@ export function LeaveRequestsTable({
               key={tab.key}
               variant={statusFilter === tab.key ? "default" : "outline"}
               size="sm"
-              onClick={() => setStatusFilter(tab.key)}
+              onClick={() => {
+                setStatusFilter(tab.key);
+                setCurrentPage(1);
+              }}
               className={`h-8 text-xs font-semibold rounded-full px-3.5 ${
                 statusFilter === tab.key
                   ? "bg-[#533afd] hover:bg-[#4434d4] text-white shadow-xs"
@@ -392,7 +432,7 @@ export function LeaveRequestsTable({
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e3e8ee]/70">
-                  {filteredRequests.map((req) => (
+                  {paginatedRequests.map((req) => (
                     <tr
                       key={req.id}
                       className="hover:bg-[#f6f9fc]/70 transition-colors cursor-pointer"
@@ -405,19 +445,22 @@ export function LeaveRequestsTable({
                         <p className="font-semibold text-[#0d253d]">
                           {req.employee.firstName} {req.employee.lastName}
                         </p>
-                        <p className="text-[11px] text-[#64748d]">
-                          {req.employee.employeeCode} •{" "}
-                          {req.employee.department?.name || "-"}
+                        <p className="text-[#64748d] text-[11px] font-mono">
+                          {req.employee.employeeCode}
                         </p>
                       </td>
-                      <td className="py-3.5 px-4 font-medium text-[#0d253d]">
+                      <td className="py-3.5 px-4 font-semibold text-[#0d253d]">
                         {req.leaveType.name}
                       </td>
-                      <td className="py-3.5 px-4 text-[#64748d] tabular-nums">
-                        {new Date(req.startDate).toLocaleDateString("th-TH")} -{" "}
-                        {new Date(req.endDate).toLocaleDateString("th-TH")}
+                      <td className="py-3.5 px-4 text-[#64748d]">
+                        {new Date(req.startDate).toLocaleDateString("th-TH")}{" "}
+                        {req.startDate !== req.endDate &&
+                          `- ${new Date(req.endDate).toLocaleDateString("th-TH")}`}
+                        <span className="text-[11px] text-[#64748d] ml-1">
+                          ({periodLabel(req.startPeriod)})
+                        </span>
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-[#0d253d] tabular-nums font-mono">
+                      <td className="py-3.5 px-4 font-mono font-semibold text-[#0d253d] tabular-nums">
                         {req.totalDays} วัน
                       </td>
                       <td className="py-3.5 px-4">
@@ -431,7 +474,7 @@ export function LeaveRequestsTable({
                                   ? "destructive"
                                   : "outline"
                           }
-                          className="text-[10px] rounded-full px-2.5 py-0.5"
+                          className="text-[10px] rounded-full px-2 py-0.5"
                         >
                           {req.status === "APPROVED"
                             ? "อนุมัติแล้ว"
@@ -443,7 +486,7 @@ export function LeaveRequestsTable({
                         </Badge>
                       </td>
                       <td
-                        className="py-3.5 px-4 pr-5 text-right whitespace-nowrap"
+                        className="py-3.5 px-4 pr-5 text-right"
                         onClick={(e) => e.stopPropagation()}
                       >
                         <div className="flex items-center justify-end space-x-1.5">
@@ -451,9 +494,9 @@ export function LeaveRequestsTable({
                             variant="outline"
                             size="sm"
                             onClick={() => setSelectedRequest(req)}
-                            className="h-7.5 text-xs text-[#273951] border-[#e3e8ee] hover:border-[#533afd] hover:text-[#533afd] rounded-full px-2.5"
+                            className="h-7.5 text-xs rounded-full px-2.5 text-[#533afd] border-[#533afd]/30 hover:bg-[#533afd]/10"
                           >
-                            <Eye className="h-3.5 w-3.5 mr-1" /> ดูข้อมูล
+                            <Eye className="h-3.5 w-3.5 mr-1" /> รายละเอียด
                           </Button>
 
                           {req.status === "APPROVED" && (
@@ -465,7 +508,7 @@ export function LeaveRequestsTable({
                                 setRevokeReason("");
                                 setRevokeError(null);
                               }}
-                              className="h-7.5 text-xs text-[#ea2261] border-[#fecdd3] hover:bg-[#ffe4e6] rounded-full px-2.5 font-semibold"
+                              className="h-7.5 text-xs rounded-full px-2.5 text-[#ea2261] border-[#fecdd3] hover:bg-[#ffe4e6] font-semibold"
                             >
                               เพิกถอน
                             </Button>
@@ -504,6 +547,14 @@ export function LeaveRequestsTable({
               </table>
             </div>
           )}
+          <DataTablePagination
+            currentPage={currentPage}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            totalItems={filteredRequests.length}
+            onPageChange={setCurrentPage}
+            onPageSizeChange={setPageSize}
+          />
         </CardContent>
       </Card>
 
